@@ -15,7 +15,7 @@ from pathlib import Path
 
 COOKIE_NAME = 'sc_adult_confirm'
 COOKIE_SECONDS = 30 * 24 * 60 * 60
-KEY_FILE = Path(__file__).resolve().parent / 'data' / '.adult_confirm_key'
+KEY_FILE = Path(__file__).resolve().parent.parent / 'data' / '.adult_confirm_key'
 
 
 def _key():

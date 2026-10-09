@@ -2,7 +2,7 @@
 
 This is the existing Sc Telegram bot v17 plus the MIKO manga frontend prototype in `website/`.
 
-Run from the Sc directory: `source .venv/bin/activate && python Miko.py`. Both the Telegram bot and the website preview start from the same process.
+Run from the Sc directory: `source .venv/bin/activate && python3 miko.py`. Both the Telegram bot and the website preview start from the same process.
 
 Website: `http://YOUR_VPS_IP:1980` (allow port 1980 in firewall if needed). Set `SC_WEB_PORT` or `SC_WEB_HOST` to override defaults.
 

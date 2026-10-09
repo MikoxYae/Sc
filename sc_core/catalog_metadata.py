@@ -10,7 +10,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit
 
-from metadata_engine import MetadataEngine, normalize
+from .metadata_engine import MetadataEngine, normalize
 
 LOG = logging.getLogger('Sc.catalog_metadata')
 PROVIDER_PRIORITY = ('anilist', 'mangaupdates', 'mangadex')
@@ -300,7 +300,7 @@ def enrich_published_title(category: str, slug: str, *, engine=None,
     if category not in MATCHED_TYPES or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,130}', slug):
         raise ValueError('Invalid category/slug')
     if col is None:
-        from catalog_db import collection
+        from .catalog_db import collection
         col = collection(category)
     if col is None:
         return {'status': 'unavailable', 'reason': 'MongoDB connection not configured'}

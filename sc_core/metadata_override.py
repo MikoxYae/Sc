@@ -16,11 +16,11 @@ import os
 import re
 from pathlib import Path
 from PIL import Image, ImageOps
-from catalog_db import CATEGORIES, collection
-from catalog_metadata import clean_description, valid_cover
-from metadata_engine import normalize
+from .catalog_db import CATEGORIES, collection
+from .catalog_metadata import clean_description, valid_cover
+from .metadata_engine import normalize
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 COVERS = ROOT / 'data' / 'cover_uploads'
 
 

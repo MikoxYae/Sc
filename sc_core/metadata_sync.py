@@ -7,8 +7,8 @@ Examples:
 """
 import argparse
 import logging
-from catalog_db import CATEGORIES, collection
-from catalog_metadata import enrich_published_title
+from .catalog_db import CATEGORIES, collection
+from .catalog_metadata import enrich_published_title
 
 
 def main(argv=None):

@@ -2,7 +2,7 @@
 import argparse
 import time
 
-from chapter_reader import prepare
+from .chapter_reader import prepare
 
 
 def main():

@@ -12,7 +12,7 @@ import requests
 from bs4 import BeautifulSoup
 from PIL import Image, ImageOps, UnidentifiedImageError
 from reportlab.pdfgen import canvas
-from site_adapters import is_mangadass, MANGADASS_READER_SELECTORS
+from .site_adapters import is_mangadass, MANGADASS_READER_SELECTORS
 
 HEADERS = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/125.0 Safari/537.36', 'Accept': 'text/html,application/xhtml+xml,image/avif,image/webp,image/*;q=0.9,*/*;q=0.8'}
 IMAGE_ATTRS = ('data-src', 'data-lazy-src', 'data-original', 'data-url', 'data-cfsrc', 'data-lazy', 'src')

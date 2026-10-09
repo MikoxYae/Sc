@@ -21,9 +21,9 @@ existing `sc-miko.service`. No Python dependencies or port configuration changed
 Run from `/root/Sc`, with the existing virtual environment:
 
 ```
-.venv/bin/python3 publication_check.py --category adult_manhwa
-.venv/bin/python3 storage_sync.py --category adult_manhwa
-.venv/bin/python3 storage_sync.py --category adult_manhwa --apply
+.venv/bin/python3 miko.py publication-check --category adult_manhwa
+.venv/bin/python3 miko.py storage-sync --category adult_manhwa
+.venv/bin/python3 miko.py storage-sync --category adult_manhwa --apply
 ```
 
 The second command prints a dry-run and the third commits verified complete

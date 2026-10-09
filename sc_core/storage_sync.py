@@ -12,10 +12,10 @@ import json
 import re
 from pathlib import Path
 
-from catalog_db import CATEGORIES, collection, save_published_chapter
-from publish_recovery import replay
+from .catalog_db import CATEGORIES, collection, save_published_chapter
+from .publish_recovery import replay
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 PDF_RE = re.compile(r'^(.+?)\s*-\s*(?:chapter|ch)\s*(\d+(?:[._]\d+)?)'
                     r'(?:\s*-\s*part\s*(\d+)\s+of\s+(\d+))?\.pdf$', re.IGNORECASE)
 

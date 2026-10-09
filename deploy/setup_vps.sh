@@ -5,7 +5,7 @@ set -Eeuo pipefail
 cd /root/Sc
 [[ -x .venv/bin/python3 ]] || { echo 'Missing .venv; install dependencies once.' >&2; exit 1; }
 [[ -f config.py ]] || { echo 'Missing private config.py.' >&2; exit 1; }
-.venv/bin/python3 -m py_compile miko.py Miko.py website_server.py
+.venv/bin/python3 -m py_compile miko.py sc_core/bot.py sc_core/website_server.py
 IP="${SC_PUBLIC_IP:-$(curl -4fsS --connect-timeout 5 --max-time 10 https://api.ipify.org)}"
 [[ "$IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || { echo 'Invalid public IP.' >&2; exit 1; }
 HOST="${SC_DOMAIN:-${IP}.sslip.io}"

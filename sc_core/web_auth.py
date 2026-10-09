@@ -2,7 +2,7 @@
 import secrets, hashlib, hmac, re
 from datetime import datetime, timezone, timedelta
 from pymongo import MongoClient
-from catalog_db import uri_for
+from .catalog_db import uri_for
 
 OWNER_EMAIL = 'musicstudios756@gmail.com'
 

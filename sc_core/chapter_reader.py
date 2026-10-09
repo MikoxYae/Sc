@@ -18,10 +18,10 @@ from pathlib import Path
 from uuid import uuid4
 
 import requests
-from catalog_db import CATEGORIES, collection
+from .catalog_db import CATEGORIES, collection
 
 LOG = logging.getLogger('Sc.reader')
-CACHE = Path(os.getenv('SC_READER_CACHE', str(Path(__file__).parent / 'data' / 'reader_cache')))
+CACHE = Path(os.getenv('SC_READER_CACHE', str(Path(__file__).resolve().parent.parent / 'data' / 'reader_cache')))
 CACHE.mkdir(parents=True, exist_ok=True)
 WORKERS = ThreadPoolExecutor(max_workers=max(1, min(2, int(os.getenv('SC_READER_WORKERS', '2')))),
                              thread_name_prefix='ScReader')
@@ -446,7 +446,7 @@ def seed_uploaded_chapter(category, title, number, channel, messages, images_dir
     names = []
     try:
         work.mkdir()
-        # Copy before TemporaryDirectory in Miko.py is removed. No MongoDB binary storage.
+        # Copy before TemporaryDirectory in sc_core/bot.py is removed. No MongoDB binary storage.
         for n, source in enumerate(originals, 1):
             dest = work / f'source_{n:04d}{source.suffix.lower()}'
             shutil.copyfile(source, dest)

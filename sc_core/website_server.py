@@ -6,12 +6,12 @@ from pathlib import Path
 from functools import partial
 from http.cookies import SimpleCookie
 from pymongo.errors import PyMongoError,DuplicateKeyError
-from catalog_db import public_catalog,CATEGORIES,collection,public_title,PUBLIC_TITLE_PROJECTION
-import web_auth
-import chapter_reader
-import cover_proxy
-import adult_access
-LOG=logging.getLogger('Sc.website');ROOT=Path(__file__).resolve().parent/'website'
+from .catalog_db import public_catalog,CATEGORIES,collection,public_title,PUBLIC_TITLE_PROJECTION
+from . import web_auth
+from . import chapter_reader
+from . import cover_proxy
+from . import adult_access
+LOG=logging.getLogger('Sc.website');ROOT=Path(__file__).resolve().parent.parent/'website'
 
 def _json_default(value):
     if isinstance(value, (datetime, date)):

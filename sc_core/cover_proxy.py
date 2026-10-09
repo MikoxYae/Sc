@@ -18,16 +18,16 @@ from pathlib import Path
 import requests
 from PIL import Image, UnidentifiedImageError
 
-from catalog_metadata import valid_cover
+from .catalog_metadata import valid_cover
 
 LOG = logging.getLogger('Sc.cover_proxy')
-CACHE_DIR = Path(__file__).resolve().parent / 'data' / 'cover_cache'
+CACHE_DIR = Path(__file__).resolve().parent.parent / 'data' / 'cover_cache'
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 TTL_SECONDS = 86400
 _LOCK = threading.Lock()
 Image.MAX_IMAGE_PIXELS = 25_000_000
 
-OWNER_COVERS = Path(__file__).resolve().parent / 'data' / 'cover_uploads'
+OWNER_COVERS = Path(__file__).resolve().parent.parent / 'data' / 'cover_uploads'
 
 def owner_cover_bytes(filename: str) -> bytes:
     """Serve only converted owner-uploaded covers under the private data tree."""

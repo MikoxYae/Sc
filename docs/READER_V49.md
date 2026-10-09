@@ -58,4 +58,4 @@ To apply environment variables in systemd, use a drop-in configuration, `systemc
 cd /root/Sc && .venv/bin/python3 -m pytest -q tests/test_reader_v49.py
 ```
 
-Optional for environments without pytest: `python3 -m compileall -q chapter_reader.py website_server.py Miko.py` and `curl -fsS http://127.0.0.1:1276/api/health`.
+Optional for environments without pytest: `python3 -m compileall -q sc_core/chapter_reader.py sc_core/website_server.py sc_core/bot.py` and `curl -fsS http://127.0.0.1:1276/api/health`.

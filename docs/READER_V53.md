@@ -5,13 +5,13 @@
 - **Newly published chapters:** after the PDF is delivered and published to MongoDB, the bot stages the original downloaded chapter images from the temporary scraper folder into a disposable reader cache. A background worker converts each to WebP. The website can serve page 1 immediately when it is prepared and add page 2, 3, etc. while the rest are prepared. No extra Telegram posts or MongoDB PDF/image storage.
 - **Multipart chapters:** older chapters split into multiple PDFs can display pages from part 1 while subsequent PDF parts are still being downloaded. Each WebP is written atomically to avoid partially loaded images.
 - **Previously published single-PDF chapters:** the first reader request **still must download the whole PDF** because ordinary PDFs are not reliably readable from partial bytes. Rendering becomes progressively visible page by page *after* that download; the 72-hour VPS cache makes subsequent reads faster.
-- **Optional manual warm-up for older chapters:** `.venv/bin/python3 reader_prefetch.py --category manhwa --slug example-title --chapter 1` prepares that chapter's reader cache before visitors click. Use an actual published category/slug/chapter.
+- **Optional manual warm-up for older chapters:** `.venv/bin/python3 miko.py reader-prefetch --category manhwa --slug example-title --chapter 1` prepares that chapter's reader cache before visitors click. Use an actual published category/slug/chapter.
 - **UX:** early pages show without waiting for later conversions; progress compacts and the browser updates more frequently until the first pages appear. Mobile reader scrolling and tap mapping (LEFT=UP / RIGHT=DOWN) remain unchanged.
 
 ## Files
 
 - `chapter_reader.py` contains background cache seeding, atomic WebP publication and per-PDF-part progressive rendering.
-- `Miko.py` stages original page images after successful Telegram + MongoDB publishing; failure to cache is **nonfatal** for the existing upload workflow.
+- `sc_core/bot.py` stages original page images after successful Telegram + MongoDB publishing; failure to cache is **nonfatal** for the existing upload workflow.
 - `website/app.js`, `website/styles.css`, `website/index.html` include progressive page UI + fresh cache-busting asset versions.
 - `reader_prefetch.py` optionally prepares one older chapter.
 

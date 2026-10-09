@@ -4,9 +4,9 @@ Example: .venv/bin/python3 publication_check.py --category adult_manhwa
 Does not print Telegram IDs, secrets, or stored file references.
 """
 import argparse
-from catalog_db import CATEGORIES, collection
-from publish_recovery import pending
-from storage_sync import selected_channel
+from .catalog_db import CATEGORIES, collection
+from .publish_recovery import pending
+from .storage_sync import selected_channel
 
 
 def main():

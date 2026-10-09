@@ -18,7 +18,7 @@ operator can provide the accurate information below.
 
 ```bash
 cd /root/Sc
-.venv/bin/python3 metadata_sync.py --category adult_manhwa --slug milf-hunting-in-another-world-raw --force
+.venv/bin/python3 miko.py metadata-sync --category adult_manhwa --slug milf-hunting-in-another-world-raw --force
 ```
 
 Output statuses:
@@ -40,7 +40,7 @@ text file with an accurate synopsis. Both stay local (not included in ZIPs).
 
 ```bash
 cd /root/Sc
-.venv/bin/python3 metadata_override.py --category adult_manhwa \
+.venv/bin/python3 miko.py metadata-override --category adult_manhwa \
   --slug milf-hunting-in-another-world-raw \
   --cover-file /root/approved-poster.jpg \
   --synopsis-file /root/approved-synopsis.txt

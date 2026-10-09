@@ -5,7 +5,7 @@ from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from pymongo import MongoClient, DESCENDING
 from pymongo.errors import PyMongoError
-ROOT=Path(__file__).resolve().parent
+ROOT=Path(__file__).resolve().parent.parent
 LOG = logging.getLogger('Sc.catalog')
 CATEGORIES={'manga':'sc_manga','manhwa':'sc_manhwa','manhua':'sc_manhua',
             'webtoon':'sc_webtoon','adult_manga':'sc_adult_manga',

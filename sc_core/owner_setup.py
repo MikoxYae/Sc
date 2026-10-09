@@ -3,8 +3,8 @@ import getpass
 import secrets
 from datetime import datetime, timezone
 from pymongo import MongoClient
-from web_auth import OWNER_EMAIL, digest, valid_password
-from catalog_db import uri_for
+from .web_auth import OWNER_EMAIL, digest, valid_password
+from .catalog_db import uri_for
 
 def main():
     uri = uri_for('manga')

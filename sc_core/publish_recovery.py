@@ -11,7 +11,7 @@ import re
 import threading
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 JOURNAL = ROOT / 'data' / 'publish_pending.json'
 _LOCK = threading.RLock()
 
@@ -46,7 +46,7 @@ def _write(data):
 
 
 def record(category, title, chapter, pages, channel, messages, *, ready=False):
-    from catalog_db import CATEGORIES
+    from .catalog_db import CATEGORIES
     if category not in CATEGORIES or not title or not messages or not channel:
         raise ValueError('Invalid pending publication')
     clean_messages = []
@@ -81,7 +81,7 @@ def pending(category=None):
 
 def replay(category=None, *, dry_run=True):
     """Recover completed Telegram copies that were not committed to MongoDB."""
-    from catalog_db import CATEGORIES, save_published_chapter
+    from .catalog_db import CATEGORIES, save_published_chapter
     count = 0
     failed = 0
     for entry in pending(category):

@@ -1,4 +1,4 @@
-"""Telegram control for Sc. Run: python Miko.py"""
+"""Telegram control for Sc. Launch via python3 miko.py."""
 import asyncio
 import json
 import html
@@ -15,15 +15,15 @@ import os
 from urllib.parse import urlparse, urljoin, urlunparse
 import requests
 from bs4 import BeautifulSoup
-from sc import fetch, HEADERS
+from .scraper import fetch, HEADERS
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
 import config
-from sc import safe_url, make_pdf
-from site_adapters import is_mangadass, discover_mangadass, extract_number
-from metadata_engine import MetadataEngine, save_draft, list_drafts, remove_draft
+from .scraper import safe_url, make_pdf
+from .site_adapters import is_mangadass, discover_mangadass, extract_number
+from .metadata_engine import MetadataEngine, save_draft, list_drafts, remove_draft
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 LOG = logging.getLogger('Sc')
@@ -32,7 +32,7 @@ class PublishPendingError(RuntimeError):
     """Telegram already has the PDF; retry MongoDB without reuploading."""
 
 BUSY = asyncio.Lock()
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 DATA_FILE = ROOT / 'data' / 'settings.json'
 
 def load_data():
@@ -66,7 +66,7 @@ def normalize_channel(value):
     return int('-100' + digits)
 
 async def check_storage(bot):
-    from catalog_db import CATEGORIES, CATEGORY_LABELS
+    from .catalog_db import CATEGORIES, CATEGORY_LABELS
     messages = []
     for category in CATEGORIES:
         cid = DATA.get('storage_channels', {}).get(category)
@@ -142,7 +142,7 @@ CHANNEL_CATEGORIES_KB = keyboard([[('Manga','channel_manga'),('Manhwa','channel_
 PICTURES_KB = keyboard([[('Start Picture','pic_start'),('Settings Picture','pic_settings')], [('Use Same Picture','pic_same'),('Back','settings')], [('Close','close')]])
 
 def category_label(key):
-    from catalog_db import CATEGORY_LABELS
+    from .catalog_db import CATEGORY_LABELS
     return CATEGORY_LABELS.get(key, 'Not selected')
 
 
@@ -169,18 +169,18 @@ def text_for(page):
     if page == 'settings':
         return card('BOT SETTINGS', 'Select a section below. Saved changes take effect immediately.')
     if page == 'storage':
-        from catalog_db import CATEGORIES
+        from .catalog_db import CATEGORIES
         channels = DATA.get('storage_channels', {})
         return card('STORAGE SETTINGS', 'One MongoDB connection. Assign a separate Telegram storage channel to each website category.',
                     f'<b>{smallcaps("MongoDB")}:</b> ' + ('Set' if mongo_uri() else 'Not set') +
                     f'\n<b>{smallcaps("Channels set")}:</b> {sum(bool(channels.get(c)) for c in CATEGORIES)}/{len(CATEGORIES)}')
     if page == 'storage_channel':
-        from catalog_db import CATEGORIES, CATEGORY_LABELS
+        from .catalog_db import CATEGORIES, CATEGORY_LABELS
         channels = DATA.get('storage_channels', {})
         details = '\n'.join(f'<b>{smallcaps(CATEGORY_LABELS[c])}:</b> <code>{channels[c]}</code>' if channels.get(c) else f'<b>{smallcaps(CATEGORY_LABELS[c])}:</b> {smallcaps("Not set")}' for c in CATEGORIES)
         return card('CHANNEL ID', 'Select a category to configure its private Telegram channel.', details)
     if page.startswith('channel_'):
-        from catalog_db import CATEGORIES, CATEGORY_LABELS
+        from .catalog_db import CATEGORIES, CATEGORY_LABELS
         category = page[len('channel_'):]
         if category in CATEGORIES:
             current = DATA.get('storage_channels', {}).get(category)
@@ -339,7 +339,7 @@ async def callback(update, context):
         return
     if key.startswith('pick_category:'):
         category = key.split(':', 1)[1]
-        from catalog_db import CATEGORIES
+        from .catalog_db import CATEGORIES
         if category not in CATEGORIES:
             await q.answer('Invalid category', show_alert=True)
             return
@@ -466,7 +466,7 @@ async def private_input(update, context):
         await run_chapter_batch(update, context, selected, missing, context.user_data.pop('range_message_id', None))
         return True
     if pending and pending.startswith('channel_'):
-        from catalog_db import CATEGORIES
+        from .catalog_db import CATEGORIES
         category = pending[len('channel_'):]
         if category not in CATEGORIES:
             return False
@@ -682,7 +682,7 @@ async def process_one(update, context, url, progress_message=None, batch_mode=Fa
         msg = progress_message or await update.effective_message.reply_text(progress_text('Detecting chapter',0,1,0,title=job_title,chapter=job_chapter), parse_mode='HTML',reply_markup=progress_keyboard())
         with tempfile.TemporaryDirectory(prefix='sc_') as tmp:
             proc = await asyncio.create_subprocess_exec(
-                sys.executable, str(ROOT / 'sc.py'), url, '--output', tmp,
+                sys.executable, '-m', 'sc_core.scraper', url, '--output', tmp,
                 '--max-pages', str(config.MAX_PAGES),
                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
                 cwd=str(ROOT),
@@ -802,7 +802,7 @@ async def process_one(update, context, url, progress_message=None, batch_mode=Fa
                                 channel_messages.append({'message_id': copied.message_id, 'file_id': sent.document.file_id, 'file_size': sent.document.file_size, 'filename': filename})
                                 # Persist each completed Telegram copy before attempting the MongoDB write.
                                 # Interrupted multipart chapters remain non-publishable until all parts exist.
-                                from publish_recovery import record
+                                from .publish_recovery import record
                                 await asyncio.to_thread(record, category, title, chapter, 0, channel,
                                                         channel_messages, ready=False)
                             except Exception:
@@ -810,8 +810,8 @@ async def process_one(update, context, url, progress_message=None, batch_mode=Fa
                                 raise RuntimeError('Storage channel upload failed. Check bot admin rights.')
                 website_published = False
                 if channel_messages:
-                    from catalog_db import save_published_chapter
-                    from publish_recovery import record, forget
+                    from .catalog_db import save_published_chapter
+                    from .publish_recovery import record, forget
                     image_count = len([p for p in (Path(tmp)/'images').iterdir()
                                        if p.suffix.lower() in ('.jpg', '.jpeg', '.png')])
                     # Mark the journal complete only after every PDF part was copied.
@@ -826,7 +826,7 @@ async def process_one(update, context, url, progress_message=None, batch_mode=Fa
                         # The reader then publishes WebP pages one by one in the background;
                         # future visitors won't re-download the complete Telegram PDF.
                         try:
-                            from chapter_reader import seed_uploaded_chapter
+                            from .chapter_reader import seed_uploaded_chapter
                             await asyncio.to_thread(
                                 seed_uploaded_chapter, category, title, chapter, channel,
                                 channel_messages, Path(tmp) / 'images')
@@ -837,11 +837,11 @@ async def process_one(update, context, url, progress_message=None, batch_mode=Fa
                                  category, title, chapter, len(channel_messages))
                     except Exception:
                         LOG.exception('MongoDB publish failed for category %s chapter %s; durable recovery saved', category, chapter)
-                        raise PublishPendingError('PDF stored in Telegram; MongoDB publish pending. Use storage_sync.py --category ' + category + ' --apply.')
+                        raise PublishPendingError('PDF stored in Telegram; MongoDB publish pending. Use python3 miko.py storage-sync --category ' + category + ' --apply.')
                     # Metadata is OPTIONAL. Provider failures must not mark an
                     # already published chapter as failed or cause a duplicate upload.
                     try:
-                        from catalog_metadata import enrich_published_title
+                        from .catalog_metadata import enrich_published_title
                         import re as _metadata_re
                         _slug = _metadata_re.sub(r'[^a-z0-9]+', '-', title.casefold()).strip('-')[:130]
                         async def _refresh_metadata(_cat, _slug_value):
@@ -1090,7 +1090,7 @@ def main():
     app.add_handler(CommandHandler('status', status))
     app.add_handler(CommandHandler('cancel', cancel))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_url))
-    from website_server import start_website
+    from .website_server import start_website
     website_server = start_website()
     print('Sc Telegram bot + website preview starting (owner and admins)...', flush=True)
     try:
