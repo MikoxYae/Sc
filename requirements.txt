@@ -3,3 +3,5 @@ beautifulsoup4>=4.12,<5
 Pillow>=11,<13
 reportlab>=4.2,<5
 python-telegram-bot>=22,<23
+
+pymongo[srv]>=4.6,<5

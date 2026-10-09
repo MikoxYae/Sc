@@ -8,13 +8,60 @@ output/
 data/settings.json
 data/*.tmp
 
+data/mongo.env
+data/*.env
+.env
+.env.*
+
 config.py
 .env
 .env.*
+*.env
 .venv/
+__pycache__/
+*.pyc
+*.log
+*.zip
+*.bak
+.certs/
+data/
+output/
+.cache/
+
+# Private configuration
+config.py
+.env
+.env.*
+*.env
+*.bak
+*.log
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Private storage
+data/
+output/
+.certs/
+.cache/
+*.zip
+
+# Sensitive files
+config.py
+.env
+.env.*
+*.env
+*.bak
+*.log
+.venv/
+venv/
 __pycache__/
 *.pyc
 data/
 output/
-*.log
+.certs/
+.cache/
 *.zip
