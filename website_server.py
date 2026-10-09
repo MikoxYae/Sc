@@ -1,13 +1,22 @@
 """Website and public MongoDB-backed catalog API on port 1980."""
-import json, logging, os, threading, sys, urllib.parse, ssl
+import json, logging, os, threading, sys, urllib.parse, ssl, requests
+from datetime import date, datetime
 from http.server import SimpleHTTPRequestHandler,ThreadingHTTPServer,BaseHTTPRequestHandler
 from pathlib import Path
 from functools import partial
 from http.cookies import SimpleCookie
 from pymongo.errors import PyMongoError,DuplicateKeyError
-from catalog_db import public_catalog,CATEGORIES,collection
+from catalog_db import public_catalog,CATEGORIES,collection,public_title,PUBLIC_TITLE_PROJECTION
 import web_auth
+import chapter_reader
+import cover_proxy
 LOG=logging.getLogger('Sc.website');ROOT=Path(__file__).resolve().parent/'website'
+
+def _json_default(value):
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    raise TypeError('Unsupported JSON value: '+type(value).__name__)
+
 class Handler(SimpleHTTPRequestHandler):
     def list_directory(self,path):self.send_error(403);return None
     def end_headers(self):
@@ -17,7 +26,7 @@ class Handler(SimpleHTTPRequestHandler):
         super().end_headers()
     def log_message(self,fmt,*args):LOG.info('Website: '+fmt,*args)
     def respond(self,code,obj,extra=None):
-        raw=json.dumps(obj,ensure_ascii=False).encode();self.send_response(code);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Content-Length',str(len(raw)))
+        raw=json.dumps(obj,ensure_ascii=False,default=_json_default).encode();self.send_response(code);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Content-Length',str(len(raw)))
         for k,v in (extra or {}).items():self.send_header(k,v)
         self.end_headers();self.wfile.write(raw)
     def token(self):
@@ -25,6 +34,32 @@ class Handler(SimpleHTTPRequestHandler):
         except (AttributeError,ValueError):return ''
     def do_GET(self):
         u=urllib.parse.urlsplit(self.path)
+        if u.path=='/api/health':
+            return self.respond(200,{'ok':True,'service':'sc-website'})
+        if u.path=='/api/cover':
+            q=urllib.parse.parse_qs(u.query)
+            cat=q.get('category',[''])[0];slug=q.get('slug',[''])[0]
+            if cat not in CATEGORIES or not __import__('re').fullmatch(r'[a-z0-9][a-z0-9-]{0,130}',slug):
+                return self.respond(400,{'error':'Invalid cover identifier'})
+            try:
+                col=collection(cat)
+                if col is None:return self.respond(503,{'error':'Catalog unavailable'})
+                doc=col.find_one({'slug':slug,'published':True,'chapters.0':{'$exists':True}},
+                                 {'_id':0,'cover_url':1})
+                if not doc or not cover_proxy.valid_cover(doc.get('cover_url')):
+                    return self.respond(404,{'error':'No verified cover available'})
+                picture=cover_proxy.cover_bytes(doc['cover_url'])
+                self.send_response(200)
+                self.send_header('Content-Type','image/webp')
+                self.send_header('Content-Length',str(len(picture)))
+                self.send_header('Cache-Control','public, max-age=3600')
+                self.end_headers()
+                self.wfile.write(picture)
+                return
+            except (ValueError, requests.RequestException, OSError):
+                return self.respond(502,{'error':'Provider cover currently unavailable'})
+            except (PyMongoError,RuntimeError):
+                return self.respond(503,{'error':'Catalog temporarily unavailable'})
         if u.path=='/api/catalog':
             q=urllib.parse.parse_qs(u.query)
             category=q.get('category',[''])[0] or None
@@ -41,13 +76,43 @@ class Handler(SimpleHTTPRequestHandler):
             try:
                 col=collection(cat)
                 if col is None:return self.respond(503,{'error':'Catalog database unavailable'})
-                doc=col.find_one({'slug':slug,'published':True,'chapters.0':{'$exists':True}},{'_id':0,'telegram':0,'storage':0,'chapters.telegram':0,'chapters.file_id':0})
+                doc=col.find_one({'slug':slug,'published':True,'chapters.0':{'$exists':True}},PUBLIC_TITLE_PROJECTION)
                 if not doc:return self.respond(404,{'error':'Title not found'})
-                for k in ('updated_at','created_at'):
-                    if hasattr(doc.get(k),'isoformat'):doc[k]=doc[k].isoformat()
-                doc['chapters']=[{'number':str(ch.get('number','')),'title':str(ch.get('title',''))} for ch in doc.get('chapters',[]) if isinstance(ch,dict)]
-                return self.respond(200,doc)
-            except PyMongoError:return self.respond(503,{'error':'Catalog database unavailable'})
+                return self.respond(200,public_title(doc,cat))
+            except (PyMongoError,RuntimeError) as exc:
+                LOG.warning('Title lookup unavailable (%s)',type(exc).__name__)
+                return self.respond(503,{'error':'Catalog database unavailable'})
+        if u.path in ('/api/chapter', '/api/chapter/page'):
+            q=urllib.parse.parse_qs(u.query)
+            cat=q.get('category',[''])[0];slug=q.get('slug',[''])[0];num=q.get('chapter',[''])[0]
+            try:
+                chapter_reader.validate(cat,slug,num)
+                # Adult reading stays restricted until age verification is implemented.
+                if cat.startswith('adult_'):
+                    return self.respond(403,{'error':'Adult reader requires age verification; not enabled yet'})
+                if u.path=='/api/chapter':
+                    return self.respond(200,chapter_reader.prepare(cat,slug,num))
+                page=q.get('page',[''])[0]
+                chapter_reader.chapter_record(cat,slug,num)
+                path=chapter_reader.page_path(cat,slug,num,page)
+                data=path.read_bytes()
+                self.send_response(200)
+                self.send_header('Content-Type','image/webp')
+                self.send_header('Content-Length',str(len(data)))
+                self.send_header('Cache-Control','private, max-age=3600')
+                self.end_headers()
+                self.wfile.write(data)
+                return
+            except ValueError as exc:return self.respond(400,{'error':str(exc)})
+            except FileNotFoundError:return self.respond(404,{'error':'Chapter or page not available'})
+            except (PyMongoError,RuntimeError, OSError) as exc:
+                LOG.warning('Reader unavailable: %s',type(exc).__name__)
+                return self.respond(503,{'error':'Chapter storage is temporarily unavailable. Please retry.'},
+                                    {'Retry-After':'3'})
+            except Exception as exc:
+                # Always return JSON instead of unexpectedly closing the TCP connection.
+                LOG.error('Unexpected chapter endpoint failure (%s)',type(exc).__name__)
+                return self.respond(500,{'error':'Chapter could not be loaded. Please retry.'})
         if u.path=='/api/me':
             try:return self.respond(200,{'user':web_auth.identity(self.token())})
             except (PyMongoError,RuntimeError):return self.respond(200,{'user':None})
@@ -65,9 +130,14 @@ class Handler(SimpleHTTPRequestHandler):
         # Cross-origin writes blocked; deployment must use HTTPS reverse proxy.
         origin=self.headers.get('Origin','');host=self.headers.get('Host','')
         if origin and urllib.parse.urlsplit(origin).netloc!=host:return self.respond(403,{'error':'Invalid origin'})
-        if int(self.headers.get('Content-Length','0') or '0')>4096:return self.respond(413,{'error':'Request too large'})
         try:
-            payload=json.loads(self.rfile.read(int(self.headers.get('Content-Length','0') or '0')))
+            length=int(self.headers.get('Content-Length','0') or '0')
+        except (ValueError,TypeError):
+            return self.respond(400,{'error':'Invalid request length'})
+        if length<0 or length>4096:return self.respond(413,{'error':'Request too large'})
+        try:
+            payload=json.loads(self.rfile.read(length))
+            if not isinstance(payload,dict):raise ValueError('Invalid request data')
             if self.path=='/api/logout':
                 web_auth.logout(self.token());return self.respond(200,{'ok':True},{'Set-Cookie':'sc_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0'})
             email=payload.get('email','');password=payload.get('password','')
@@ -77,11 +147,14 @@ class Handler(SimpleHTTPRequestHandler):
             token=web_auth.login(email,password)
             secure='; Secure' if isinstance(self.connection, ssl.SSLSocket) or self.proxy_https() else ''
             return self.respond(200,{'ok':True},{'Set-Cookie':'sc_session='+token+'; HttpOnly; SameSite=Lax; Path=/; Max-Age=604800'+secure})
+        except (json.JSONDecodeError,UnicodeDecodeError):return self.respond(400,{'error':'Invalid JSON request'})
         except DuplicateKeyError:return self.respond(409,{'error':'Account already exists'})
         except ValueError as exc:return self.respond(400,{'error':str(exc)[:120]})
-        except (PyMongoError,RuntimeError):return self.respond(503,{'error':'Database unavailable'})
+        except (PyMongoError,RuntimeError) as exc:
+            LOG.warning('Authentication backend unavailable: %s',type(exc).__name__)
+            return self.respond(503,{'error':'Database unavailable'})
 class QuietHTTPServer(ThreadingHTTPServer):
-    daemon_threads=True;allow_reuse_address=True
+    daemon_threads=True;allow_reuse_address=True;request_queue_size=128
     def handle_error(self,request,client_address):
         if isinstance(sys.exc_info()[1],(ConnectionResetError,BrokenPipeError,ConnectionAbortedError)):return
         super().handle_error(request,client_address)
@@ -105,7 +178,7 @@ class RedirectToHTTPS(BaseHTTPRequestHandler):
 
 
 def start_website(port=None,host=None):
-    port=int(port or os.getenv('SC_WEB_PORT','1980'))
+    port=int(port or os.getenv('SC_WEB_PORT', '1276'))
     host=host or os.getenv('SC_WEB_HOST','0.0.0.0')
     cert=os.getenv('SC_TLS_CERT'); key=os.getenv('SC_TLS_KEY')
     if bool(cert) != bool(key):
@@ -128,7 +201,12 @@ def start_website(port=None,host=None):
         threading.Thread(target=redirect.serve_forever,name='ScHttpRedirect',daemon=True).start()
         LOG.info('HTTP %s redirects to HTTPS %s',port,tls_port)
     else:
-        server=QuietHTTPServer((host,port),partial(Handler,directory=str(ROOT)))
+        try:
+            server=QuietHTTPServer((host,port),partial(Handler,directory=str(ROOT)))
+        except OSError as exc:
+            if exc.errno == 98:
+                raise RuntimeError(f'Website port {port} is already occupied. Stop the other Sc instance or use systemctl restart sc-miko.service.') from exc
+            raise
         LOG.warning('Website is running without TLS; account endpoints reject remote logins')
     threading.Thread(target=server.serve_forever,name='ScWebsite',daemon=True).start()
     LOG.info('Sc website started on %s://%s:%s','https' if cert and key else 'http',host,tls_port if cert and key else port)

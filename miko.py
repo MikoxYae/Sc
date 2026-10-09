@@ -3,6 +3,9 @@
 The standalone scraper remains available as `python3 sc.py <chapter-url>`.
 """
 import logging
+import os
+
+os.environ.setdefault("SC_WEB_PORT", "1276")
 from Miko import main as start_bot_and_website
 
 

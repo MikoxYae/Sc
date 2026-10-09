@@ -38,7 +38,7 @@ def register(email, password):
 def login(email, password):
     d = db()
     user = d.users.find_one({'email': email.strip().lower()})
-    if not user or not hmac.compare_digest(digest(password, user['salt']), user['password_hash']):
+    if not user or not user.get('salt') or not user.get('password_hash') or not hmac.compare_digest(digest(password, user['salt']), user['password_hash']):
         raise ValueError('Invalid email or password')
     token = secrets.token_urlsafe(32)
     d.sessions.create_index('expires', expireAfterSeconds=0)

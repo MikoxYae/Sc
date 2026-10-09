@@ -27,6 +27,10 @@ from metadata_engine import MetadataEngine, save_draft, list_drafts, remove_draf
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 LOG = logging.getLogger('Sc')
+
+class PublishPendingError(RuntimeError):
+    """Telegram already has the PDF; retry MongoDB without reuploading."""
+
 BUSY = asyncio.Lock()
 ROOT = Path(__file__).resolve().parent
 DATA_FILE = ROOT / 'data' / 'settings.json'
@@ -796,18 +800,51 @@ async def process_one(update, context, url, progress_message=None, batch_mode=Fa
                             try:
                                 copied = await context.bot.copy_message(chat_id=channel, from_chat_id=sent.chat_id, message_id=sent.message_id)
                                 channel_messages.append({'message_id': copied.message_id, 'file_id': sent.document.file_id, 'filename': filename})
+                                # Persist each completed Telegram copy before attempting the MongoDB write.
+                                # Interrupted multipart chapters remain non-publishable until all parts exist.
+                                from publish_recovery import record
+                                await asyncio.to_thread(record, category, title, chapter, 0, channel,
+                                                        channel_messages, ready=False)
                             except Exception:
                                 LOG.exception('Storage channel upload failed for chapter %s', chapter)
                                 raise RuntimeError('Storage channel upload failed. Check bot admin rights.')
+                website_published = False
                 if channel_messages:
                     from catalog_db import save_published_chapter
+                    from publish_recovery import record, forget
+                    image_count = len([p for p in (Path(tmp)/'images').iterdir()
+                                       if p.suffix.lower() in ('.jpg', '.jpeg', '.png')])
+                    # Mark the journal complete only after every PDF part was copied.
+                    await asyncio.to_thread(record, category, title, chapter, image_count,
+                                            channel, channel_messages, ready=True)
                     try:
                         await asyncio.to_thread(save_published_chapter, category, title, chapter,
-                                                len(list((Path(tmp)/'images').glob('*'))), channel,
-                                                channel_messages)
+                                                image_count, channel, channel_messages)
+                        website_published = True
+                        await asyncio.to_thread(forget, category, title, chapter)
+                        LOG.info('WEBSITE PUBLISHED: category=%s title=%s chapter=%s parts=%s',
+                                 category, title, chapter, len(channel_messages))
                     except Exception:
-                        LOG.exception('MongoDB publish failed for chapter %s', chapter)
-                        raise RuntimeError('PDF delivered but MongoDB publishing failed.')
+                        LOG.exception('MongoDB publish failed for category %s chapter %s; durable recovery saved', category, chapter)
+                        raise PublishPendingError('PDF stored in Telegram; MongoDB publish pending. Use storage_sync.py --category ' + category + ' --apply.')
+                    # Metadata is OPTIONAL. Provider failures must not mark an
+                    # already published chapter as failed or cause a duplicate upload.
+                    try:
+                        from catalog_metadata import enrich_published_title
+                        import re as _metadata_re
+                        _slug = _metadata_re.sub(r'[^a-z0-9]+', '-', title.casefold()).strip('-')[:130]
+                        async def _refresh_metadata(_cat, _slug_value):
+                            try:
+                                outcome = await asyncio.to_thread(enrich_published_title, _cat, _slug_value)
+                                LOG.info('Metadata update %s/%s: %s', _cat, _slug_value, outcome.get('status'))
+                            except Exception:
+                                LOG.exception('Non-fatal metadata refresh error')
+                        asyncio.create_task(_refresh_metadata(category, _slug))
+                    except Exception:
+                        LOG.warning('Metadata lookup unavailable; chapter remains published', exc_info=True)
+                else:
+                    LOG.warning('WEBSITE NOT PUBLISHED: category=%s title=%s chapter=%s: no category channel copy',
+                                category, title, chapter)
                 pages = len([p for p in (Path(tmp)/'images').iterdir() if p.suffix.lower() in ('.jpg', '.jpeg', '.png')])
                 size_mb = sum(part.stat().st_size for part in parts) / 1048576
                 summary = (f'<b>{smallcaps("Category")}:</b> {html.escape(category_label(context.user_data.get("selected_category")))}\n'
@@ -816,10 +853,16 @@ async def process_one(update, context, url, progress_message=None, batch_mode=Fa
                            f'<b>{smallcaps("Pages")}:</b> {pages}\n'
                            f'<b>{smallcaps("PDF files delivered")}:</b> {len(parts)}\n'
                            f'<b>{smallcaps("Total size")}:</b> {size_mb:.1f} MB\n'
-                           f'<b>{smallcaps("Total time")}:</b> {format_duration(time.monotonic()-started)}')
+                           f'<b>{smallcaps("Total time")}:</b> {format_duration(time.monotonic()-started)}\n'
+                           f'<b>{smallcaps("Website")}:</b> {smallcaps("Published" if website_published else "Not published - configure category storage channel")}')
                 if not batch_mode:
                     await msg.edit_text(f'<b>{smallcaps("COMPLETED")}</b>\n\n{summary}',parse_mode='HTML')
-                return {'chapter':chapter,'pages':pages,'files':len(parts),'bytes':sum(part.stat().st_size for part in parts)}
+                return {'chapter':chapter,'pages':pages,'files':len(parts),
+                        'bytes':sum(part.stat().st_size for part in parts), 'published':website_published}
+            except PublishPendingError:
+                # The PDF is already copied to Telegram and a local replay record exists.
+                # Do not retry or duplicate it in the storage channel.
+                raise
             except Exception:
                 LOG.exception('Telegram upload failed')
                 await msg.edit_text(card('UPLOAD OR PUBLISH FAILED','Check VPS logs. The PDF may have been delivered; retry carefully to avoid duplicates.'),parse_mode='HTML')
@@ -940,6 +983,7 @@ async def run_chapter_batch(update, context, selected, missing, message_id=None)
         else:
             msg = await context.bot.send_message(update.effective_chat.id, batch_progress(title, selected[0][0], 1, len(selected)), parse_mode='HTML', reply_markup=progress_keyboard())
         succeeded, failed = [], []
+        website_published_count = 0
         total_pages, total_files, total_bytes = 0, 0, 0
         for index,(chapter,url) in enumerate(selected,1):
             if context.application.bot_data.get('cancel_requested'):
@@ -958,6 +1002,10 @@ async def run_chapter_batch(update, context, selected, missing, message_id=None)
                     result = await process_one(update, context, url, progress_message=msg, batch_mode=True)
                     if result:
                         break
+                except PublishPendingError as exc:
+                    reason = str(exc)[:180]
+                    LOG.error('Chapter %s website publication queued for recovery (no PDF reupload)', chapter)
+                    break
                 except Exception as exc:
                     reason = f'{type(exc).__name__}: {str(exc)[:130]}'
                     LOG.exception('Chapter %s attempt %s failed', chapter, attempt)
@@ -965,6 +1013,7 @@ async def run_chapter_batch(update, context, selected, missing, message_id=None)
                     await asyncio.sleep(min(2 ** attempt, 8))
             if result:
                 succeeded.append(chapter)
+                website_published_count += int(bool(result.get('published')))
                 total_pages += result['pages']; total_files += result['files']; total_bytes += result['bytes']
             elif not context.application.bot_data.get('cancel_requested'):
                 failed.append((chapter, url, reason))
@@ -972,13 +1021,17 @@ async def run_chapter_batch(update, context, selected, missing, message_id=None)
                 await asyncio.sleep(1)
         cancelled = context.application.bot_data.get('cancel_requested', False)
         elapsed = format_duration(time.monotonic() - started)
-        context.user_data['last_failed_chapters'] = [(chapter, url) for chapter, url, _ in failed]
+        # A pending database commit must not upload the same PDF again.
+        retryable_failed = [(chapter, url) for chapter, url, reason in failed
+                            if not reason.startswith('PDF stored in Telegram;')]
+        context.user_data['last_failed_chapters'] = retryable_failed
         summary = (f'<b>{smallcaps("BATCH CANCELLED" if cancelled else "BATCH COMPLETED")}</b>\n\n'
                    f'<b>{smallcaps("Manga")}:</b> {html.escape(title)}\n\n'
                    f'<b>{smallcaps("Selected")}:</b> {len(selected)}\n'
                    f'<b>{smallcaps("Successful")}:</b> {len(succeeded)}  |  '
                    f'<b>{smallcaps("Failed")}:</b> {len(failed)}\n'
-                   f'<b>{smallcaps("Missing from site")}:</b> {len(missing)}\n\n'
+                   f'<b>{smallcaps("Missing from site")}:</b> {len(missing)}\n'
+                   f'<b>{smallcaps("Website published")}:</b> {website_published_count} / {len(succeeded)}\n\n'
                    f'<b>{smallcaps("Total pages")}:</b> {total_pages}\n'
                    f'<b>{smallcaps("PDF files")}:</b> {total_files}\n'
                    f'<b>{smallcaps("Total size")}:</b> {total_bytes/1048576:.1f} MB\n'
@@ -990,7 +1043,7 @@ async def run_chapter_batch(update, context, selected, missing, message_id=None)
             issue_text = '\n'.join(issues)
             # Telegram editMessageText maximum is 4096 characters.
             summary += '\n\n<b>' + smallcaps('CHAPTER ISSUES') + '</b>\n' + issue_text[:max(0, 3900-len(summary))]
-        retry_markup = keyboard([[('Retry Failed', 'retry_failed'), ('Close', 'close')]]) if failed else None
+        retry_markup = keyboard([[('Retry Failed', 'retry_failed'), ('Close', 'close')]]) if retryable_failed else None
         try:
             await msg.edit_text(summary[:4096], parse_mode='HTML', reply_markup=retry_markup)
         except Exception:

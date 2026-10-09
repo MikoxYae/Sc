@@ -133,3 +133,305 @@ html,body{min-height:100%;}body{display:flex;flex-direction:column}main{flex:1}f
 .password-toggle:focus-visible{outline:2px solid #f04439;outline-offset:2px}
 .account-panel .auth-form #authFeedback{overflow-wrap:anywhere;line-height:1.5;font-size:14px}
 @media(max-width:480px){.account-panel{padding:20px 16px!important}.account-panel .auth-form input{font-size:16px!important}.account-panel h1{font-size:28px!important}}
+
+/* v35: stable mobile auth layout, keyboard/touch accessible controls */
+.account-page{width:100%;max-width:640px;min-height:0;margin-inline:auto;padding:clamp(14px,3vw,32px)!important}
+.account-panel{max-width:520px;width:100%;margin:12px auto!important;padding:clamp(18px,4vw,34px)!important;overflow:hidden}
+.account-panel h1{font-size:clamp(25px,5vw,36px)!important;line-height:1.2!important;letter-spacing:-.02em!important}
+.account-panel .auth-form{gap:10px!important;margin-top:18px!important}
+.account-panel .auth-form label{margin:8px 0 0!important;font-size:13px!important;line-height:1.5!important}
+.account-panel .auth-form input{min-width:0;width:100%;font-size:16px!important;box-sizing:border-box}
+.account-panel .auth-form .password-wrap{width:100%;min-width:0;position:relative}
+.account-panel .auth-form .password-wrap input{padding-right:64px!important}
+.account-panel .auth-form .password-toggle{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:46px!important;min-width:46px!important;min-height:42px!important;z-index:3;font-size:21px!important}
+.account-panel .auth-form .password-toggle:focus-visible{outline:2px solid #ff6258;outline-offset:2px}
+.account-panel .auth-form .primary{margin-top:16px!important;min-height:52px!important}
+.account-panel .auth-intro,.account-panel .auth-hint{font-size:13px!important;line-height:1.6!important}
+.retry-catalog{background:#b92c2b;color:white;border:0;border-radius:9px;padding:12px 18px;cursor:pointer;font-weight:800}
+@media(max-width:420px){.account-page{padding:12px!important}.account-panel{padding:18px 15px!important;border-radius:16px}.account-panel h1{font-size:27px!important}}
+
+/* v39 vertical reading experience */
+.chapter-list a.chapter{text-decoration:none;color:inherit;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;transition:border-color .2s,background .2s}
+.chapter-list a.chapter:hover,.chapter-list a.chapter:focus-visible{border-color:#ef493f;background:#211819}
+.chapter-list a.chapter span:last-child{color:#ef625a!important;white-space:nowrap}
+.reader-shell{max-width:1120px;margin:0 auto;padding:0 0 30px}
+.reader-toolbar{position:sticky;top:0;z-index:20;display:flex;justify-content:space-between;align-items:center;gap:12px;background:#111e;padding:14px 16px;border-bottom:1px solid #444;backdrop-filter:blur(16px);font-weight:800}
+.reader-toolbar a,.reader-bottom{color:#f36b62;text-decoration:none;font-weight:800}
+.reader-toolbar strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.reader-toolbar span{color:#aaa;font-size:12px}
+.reader-images{display:flex;flex-direction:column;align-items:center;gap:0;background:#080808;min-height:120px}
+.reader-images img{display:block;width:100%;max-width:100%;height:auto;object-fit:contain;margin:0;padding:0}
+.reader-images img.reader-error{min-height:100px}
+.reader-bottom{display:block;text-align:center;padding:26px 10px;background:#161616}
+@media(max-width:760px){.reader-shell{width:calc(100% + 32px);margin-left:-16px}.reader-toolbar{padding:12px 14px;font-size:12px}.reader-images{width:100%}}
+
+
+/* v41: Full-width vertical reader, especially on mobile.
+   Reader-only rules do not affect catalog or account pages. */
+html.reader-mode,body.reader-mode{width:100%;max-width:100%;overflow-x:clip}
+body.reader-mode #home{width:100%;max-width:100%;min-width:0;display:block}
+body.reader-mode #routePage{display:block;width:100%;max-width:none;margin:0;padding:0!important;min-width:0}
+body.reader-mode #routePage[hidden]{display:none!important}
+body.reader-mode .reader-shell{display:block;width:100%;max-width:1100px;min-width:0;margin:0 auto;padding:0;background:#080808}
+body.reader-mode .reader-images{display:block;width:100%;max-width:100%;min-width:0;margin:0;padding:0;overflow:hidden;background:#080808}
+body.reader-mode .reader-images img{display:block;box-sizing:border-box;width:100%!important;max-width:100%!important;min-width:0;height:auto!important;max-height:none;object-fit:fill;margin:0;padding:0;border:0;border-radius:0;vertical-align:top}
+body.reader-mode .reader-toolbar{width:100%;min-width:0;box-sizing:border-box;position:sticky;top:0;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px;align-items:center;padding:12px 16px;background:#111e}
+body.reader-mode .reader-toolbar a{justify-self:start;white-space:nowrap}
+body.reader-mode .reader-toolbar strong{justify-self:center;text-align:center;min-width:0}
+body.reader-mode .reader-toolbar span{justify-self:end;white-space:nowrap}
+body.reader-mode .reader-bottom{width:100%;box-sizing:border-box}
+@media(max-width:760px){
+ body.reader-mode .topbar,body.reader-mode footer{display:none!important}
+ body.reader-mode #home,body.reader-mode #routePage,body.reader-mode .reader-shell,body.reader-mode .reader-images{width:100%!important;max-width:100%!important;margin:0!important;padding:0!important}
+ body.reader-mode .reader-toolbar{padding:12px 10px;font-size:12px;min-height:52px}
+ body.reader-mode .reader-images img{width:100%!important;max-width:100%!important;height:auto!important}
+ body.reader-mode .reader-bottom{padding:22px 12px}
+}
+
+
+/* v42: Viewport containment and responsive reader overhaul.
+   The original .ambient element was 900px wide even on 390px screens.
+   On Chrome Android this inflated the layout viewport and made the
+   reader appear as a narrow strip beside a large black region. */
+html {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+}
+body {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+}
+#home, #homeContent, #routePage {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+.ambient {
+  position: absolute;
+  inset: 0 0 auto 0;
+  width: 100%;
+  max-width: 100%;
+  height: 720px;
+  overflow: clip;
+  background: radial-gradient(ellipse at 73% 5%, #e72c201c, transparent 65%);
+  filter: none;
+  pointer-events: none;
+}
+.topbar, footer, .hero, .categories, .library, .how {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+.hero, .hero-copy, .hero-art, .category-grid, .cards,
+.category-cards, .category, .card, .detail-info,
+.detail-hero, .chapter-list, .toolbar, .section-intro {
+  min-width: 0;
+  max-width: 100%;
+}
+.hero-art {
+  isolation: isolate;
+}
+.art-glow {
+  max-width: 85%;
+}
+/* The 8-category desktop navigation cannot fit at tablet/desktop-site widths.
+   Switch to the two-column-safe dropdown rather than letting it expand the page. */
+@media (max-width: 1199px) {
+  .topbar {
+    height: 72px;
+    padding: 0 clamp(14px, 2.5vw, 30px);
+  }
+  .topbar nav {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-width: 100%;
+    padding: 14px 20px;
+    flex-direction: column;
+    gap: 0;
+    max-height: calc(100dvh - 72px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    z-index: 40;
+    background: #151414;
+    box-shadow: 0 20px 38px #000b;
+    border-bottom: 1px solid #ffffff26;
+  }
+  .topbar nav.open { display: flex; }
+  .topbar nav a { width: 100%; min-height: 43px; padding: 12px 10px; }
+  .hamburger { display: grid; place-items: center; min-width: 44px; min-height: 44px; }
+}
+@media (min-width: 761px) and (max-width: 1100px) {
+  .hero {
+    padding: 62px 30px 60px;
+    gap: 14px;
+    min-height: unset;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .hero h1 { font-size: clamp(42px, 5.2vw, 60px); letter-spacing: -2px; }
+  .hero-art { height: 430px; }
+  .art-card.front { width: min(65%, 285px); height: 375px; left: 29%; }
+  .art-card.back { width: min(58%, 245px); height: 345px; left: 7%; }
+  .art-glow { width: 80%; height: 375px; }
+  .categories, .library, .how { padding-left: 30px; padding-right: 30px; }
+  .category-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
+  .cards { grid-template-columns: repeat(3, minmax(0,1fr)); }
+}
+@media (max-width: 760px) {
+  .topbar { height: 66px; }
+  .topbar nav { max-height: calc(100dvh - 66px); }
+  .hero { width: 100%; overflow: clip; }
+  .hero-art { max-width: min(100%, 350px); overflow: clip; }
+  .art-glow { width: 82%; max-width: 82%; }
+  .categories, .library, .how { width: 100%; }
+  .category-grid, .cards, .category-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .filters { max-width: 100%; overflow-x: auto; }
+  .route-page { width: 100%; max-width: 100%; }
+  .category-heading { max-width: 100%; }
+  .detail-hero { width: 100%; }
+}
+
+/* Always use an immersive reader page. The image column itself fills the
+   viewport, instead of inheriting the old 1100px desktop max-width. */
+html.reader-mode, body.reader-mode {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+  background: #080808;
+}
+body.reader-mode .ambient,
+body.reader-mode .topbar,
+body.reader-mode footer { display: none !important; }
+body.reader-mode #home,
+body.reader-mode #routePage,
+body.reader-mode .reader-shell,
+body.reader-mode .reader-images {
+  display: block;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box;
+}
+body.reader-mode #routePage[hidden] { display: none !important; }
+body.reader-mode .reader-shell,
+body.reader-mode .reader-images { background: #080808; }
+body.reader-mode .reader-images img {
+  display: block;
+  box-sizing: border-box;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+  min-width: 0 !important;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  vertical-align: middle;
+  object-fit: contain;
+}
+body.reader-mode .reader-toolbar {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  position: sticky;
+  top: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px clamp(12px, 3vw, 34px);
+  min-height: 56px;
+  align-items: center;
+  z-index: 30;
+  background: #121212f5;
+  border-bottom: 1px solid #ffffff27;
+}
+body.reader-mode .reader-toolbar a {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  justify-self: start;
+}
+body.reader-mode .reader-toolbar strong { min-width: 0; text-align: center; }
+body.reader-mode .reader-toolbar span { justify-self: end; white-space: nowrap; }
+body.reader-mode #readerStatus {
+  box-sizing: border-box;
+  max-width: 100%;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 480px) {
+  body.reader-mode .reader-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 9px;
+    font-size: 11px;
+    padding: 10px 12px;
+    min-height: 50px;
+  }
+  body.reader-mode .reader-toolbar span { font-size: 10px; }
+}
+
+
+/* v43: real provider cover art, accurate synopsis and better mobile poster sizing. */
+.cover {position:relative;background:#151515;isolation:isolate;}
+.cover > .cover-art {
+  display:block;
+  width:100%;height:100%;max-height:100%;
+  object-fit:cover;object-position:center 22%;
+  position:relative;z-index:1;
+  border:0;
+}
+.cover > .cover-art[hidden], .cover > .cover-placeholder[hidden] {display:none!important;}
+.cover > .cover-placeholder {position:relative;z-index:1;font-weight:900;letter-spacing:.04em;color:#f24a43;font-size:clamp(18px,4vw,32px);}
+.cover:has(.cover-art:not([hidden]))::before {display:none;}
+.cover > .new-label {z-index:3;}
+.card .cover{aspect-ratio:3/4.35;height:auto;min-height:0;}
+.detail-poster.cover {width:100%;height:auto;min-height:0;aspect-ratio:3/4.4;align-self:start;}
+.detail-poster .cover-art {height:100%;}
+.story-facts {display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 24px;}
+.story-facts span {border:1px solid #ffffff24;border-radius:999px;padding:7px 11px;font-size:11px;color:#dfd9d7;font-weight:700;}
+.detail-info .story-synopsis {line-height:1.85;white-space:pre-line;overflow-wrap:anywhere;color:#d2c9c9;font-size:clamp(14px,1.3vw,17px);max-width:76ch;}
+.detail-info .story-credit {font-size:13px;line-height:1.6;color:#cfc6c6;margin:10px 0;overflow-wrap:anywhere;}
+.detail-info .metadata-credit {font-size:11px;color:#9e8d8d;}
+@media(max-width:760px){
+ .card .cover{aspect-ratio:3/4.2;}
+ .detail-hero{grid-template-columns:minmax(104px,32%) minmax(0,1fr);gap:clamp(12px,3.5vw,22px);align-items:start;}
+ .detail-poster.cover{width:100%;max-width:100%;aspect-ratio:3/4.35;}
+ .detail-info{min-width:0;}
+ .detail-info h1{overflow-wrap:anywhere;font-size:clamp(24px,5.5vw,42px);line-height:1.12;}
+ .story-facts{gap:5px;margin:9px 0 14px;}
+ .story-facts span{font-size:10px;padding:5px 7px;}
+}
+
+/* v44: non-blocking catalog partial-outage notice */
+.partial-warning{margin:0 0 18px;color:#e5b17d;font-weight:600;font-size:0.88rem;line-height:1.6}
+
+/* v45: reader recovery UI; keep buttons reachable on narrow mobile screens. */
+.reader-failure-text { margin: 0 0 20px; line-height: 1.5; overflow-wrap: anywhere; }
+.reader-retry { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; min-width: 150px; padding: 12px 22px; border: 1px solid #e6423a; border-radius: 10px; background: #e6423a; color: #fff; font: inherit; font-weight: 800; cursor: pointer; }
+.reader-retry:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+
+/* v46: tap-to-scroll reader controls on page imagery; native vertical swipes remain enabled. */
+body.reader-mode .reader-images { touch-action: pan-y pinch-zoom; }
+body.reader-mode .reader-images img { user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
+body.reader-mode .reader-tap-hint {
+  text-align: center;
+  background: #171717;
+  color: #c9c9c9;
+  border-bottom: 1px solid #ffffff20;
+  font-size: clamp(10px, 2.6vw, 12px);
+  font-weight: 800;
+  letter-spacing: .04em;
+  padding: 9px 10px;
+  margin: 0;
+}

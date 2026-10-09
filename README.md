@@ -1,129 +1,260 @@
-# Sc — Telegram Manga-to-PDF Bot (v7)
+# Sc Telegram Bot + MIKO Manga Website
 
-Run `python Miko.py`. Existing image extraction, JPEG optimization, PDF splitting, `/status`, `/cancel` and chapter URL processing are preserved.
+Start both services using `python3 miko.py` (lowercase). The Telegram bot uses long polling; the website listens on port 1276. Production deployment uses `bash deploy/setup_vps.sh` to run the application with systemd and serve it through Caddy HTTPS.
 
-## Commands
+The application preserves its original manga scraper, PDF conversion, Telegram channel storage, and MongoDB metadata features. Do not commit `config.py`, `.env`, session data, or credentials. Configure Telegram and MongoDB values privately on the VPS.
 
-- `/start`: welcome card, optional saved start picture, inline navigation.
-- `/settings`: private settings menu for owner and admins. Admin management and picture configuration are owner-only.
-- `/status`, `/cancel`: available to owner and admins.
-- Send a permitted public chapter URL: create optimized PDF.
+## VPS installation / upgrade
 
-## Admin management
+Upload the ZIP into `/root/` and run:
 
-`/settings` → Admin → Add Admin → send numeric user ID in private chat. The bot attempts to delete the submitted ID message and returns to the admin menu. Remove Admin shows one button per ID; List Admins shows saved IDs. Owner cannot be removed. Admins can operate the bot but cannot manage admins or change pictures.
-
-## Pictures
-
-`/settings` → Pictures → Start Picture or Settings Picture → send Telegram photo. Both pictures can be identical via Use Same Picture. If no picture has been provided yet, the bot uses a text-only menu. The bot attempts to delete submitted photo messages and automatically returns to the picture menu. Telegram requires permission to delete messages; in a private chat it generally can delete incoming messages.
-
-## Storage
-
-Admin IDs and Telegram photo file IDs are saved atomically to `data/settings.json` and survive restarts. No MongoDB dependency is required. `config.py` remains local and is never packaged or overwritten. Keep `data/settings.json` when upgrading.
-
-## Install / run
-
-Existing VPS installation: `cd /root/Sc && . .venv/bin/activate && python Miko.py`
-
-For updates upload the ZIP to `/root/`, stop old process, then extract over `/root/Sc`. No requirements changes in v5.
-
-## Security
-
-Never commit bot token, API hash or MongoDB password. Rotate previously shared test credentials. Only process content you have permission to access.
-
-## Automatic Telegram Menu commands (v7)
-
-On every successful startup the bot calls Telegram `setMyCommands`, so the Menu button lists `/start`, `/settings`, `/status`, `/cancel`, and `/help` automatically. No manual BotFather command configuration is needed. Telegram may take a moment to refresh the command list; reopen the chat if needed. This is a command *menu*, not permission enforcement: the existing handlers still restrict privileged actions to the owner/admins. The menu registration requires Telegram API access on startup.
-
-## v7 UI changes
-
-- All menu button labels and menu text are emoji-free.
-- Telegram HTML `<b>` is used for bold headings, with `<blockquote>` for instructions.
-- Telegram does not support choosing arbitrary custom fonts for bot messages; native Telegram formatting is used instead.
-- No more than two buttons per row. All existing admin, picture, PDF and command-menu features remain.
-- Existing config.py and data/settings.json are not included and are not overwritten.
-- No dependency changes; reuse the existing virtual environment.
-
-## v9 - Small caps Telegram UI
-
-All user-facing menu headings, instructions, button labels, command descriptions, progress messages, and common errors use the requested Unicode small-caps style (example: `ᴛʜɪs ɪs ᴍʏ ғᴀᴠ ғᴏɴᴛ`). Headings retain Telegram HTML bold and instructions retain blockquotes. Telegram does not have small-cap equivalents for every Latin character, so a few characters use their nearest available glyph. IDs, URLs, callback identifiers, and command names remain unchanged.
-
-No new dependencies. Existing `config.py`, `data/settings.json`, and `.venv` remain intact.
-
-## v10: Telegram HTML formatting fix
-
-- All HTML formatting tags remain standard HTML (`<b>`, `<blockquote>`, `<code>`).
-- Only visible text and button labels use Unicode small caps.
-- `/status` now sends its card with `parse_mode='HTML'` so tags render rather than appearing literally.
-- Callback alerts are plain text because Telegram callback alerts do not parse HTML.
-- No new dependencies. Preserve your existing local `config.py` and `data/settings.json` when updating.
-
-## v11: Chapter processing and PDF options
-
-- `/settings` -> **PDF Options**: set **PDF Picture** (a photo preview sent before the document), **Rename Format** (filename template), and **Caption Style** (Bold / Underline / Spoiler / Plain).
-- Filename placeholders: `{title}` and `{chapter}`. Example: `{title} - Chapter {chapter}` produces `Manga Title - Chapter 1.pdf`. Formatting tags cannot style a filename; styles apply to the Telegram document **caption**.
-- When a chapter URL is submitted, a single progress message updates approximately every 12 seconds with the current stage, page count and elapsed time. Telegram flood-control may defer some edits; errors are logged.
-- Scraping remains sequential with the existing configurable per-image delay; it does not bypass authentication or anti-bot measures.
-- The PDF picture is uploaded as a JPEG `thumbnail` in `sendDocument`, not as a separate photo. The bot resizes it to at most 320x320 and below 200 KB. Telegram clients may choose whether to display custom PDF thumbnails; the Bot API does not guarantee presentation.
-- Existing `config.py`, `.venv` and saved `data/settings.json` are intentionally excluded from release ZIPs. No new dependencies.
-- Note: chapter title and chapter number are derived from URL path. Sites with unusual URL patterns may need site-specific metadata parsing.
-- Existing cancellation and PDF splitting remain available. `/cancel` terminates the scraper subprocess; PDF splitting/upload may finish if cancellation is requested at that stage.
-
-Update on VPS after uploading ZIP to `/root` and stopping the previous process:
-
-```bash
-cd /root && unzip -o Sc-Telegram-Bot-Fixed-v11.zip -d /root && cd /root/Sc && source .venv/bin/activate && python Miko.py
+```sh
+cd /root && unzip -o Sc-Bot-Website-Reader-Connection-v45.zip -d /root && cd /root/Sc && systemctl restart sc-miko.service
 ```
 
+This reuses the existing virtual environment and dependencies. Only install requirements if the environment is new or missing packages. The setup does not install Docker, kill other bots, or alter unrelated Docker containers. The Caddy config is backed up before changes.
 
-## v12 chapter progress
-The progress message shows manga title, chapter, active stage, page count, elapsed time and a Cancel Download inline button. It edits the same message approximately every 12 seconds. The title is initially derived from the URL and may be updated using the page title. Cancellation stops the scraper subprocess; already uploaded files cannot be recalled. Telegram upload is not interruptible by this button once upload has started.
+**Canonical website URL:** `https://<public-ip>.sslip.io/` (normally HTTPS port 443). `http://<public-ip>:1276/` redirects to HTTPS; this is not a second unsecured login site. HTTPS requires working DNS and open inbound ports 80 and 443. If the browser still fails while the VPS returns HTTP 200, the hosting provider firewall or the mobile ISP/DNS path must be checked; no ZIP can guarantee access through an externally blocked network.
+
+## Troubleshooting
+
+```sh
+cd /root/Sc && bash deploy/check_access.sh
+```
+
+Do not run a second manual `python3 miko.py` while `sc-miko.service` is active; it will conflict with the port and Telegram polling. Use `systemctl restart sc-miko.service` to restart. Details: `deploy/README.md`.
+
+## Testing
+
+Run `python3 -m unittest discover -s tests` with the existing project dependencies installed. Some integration tests require MongoDB and network access. No live production deployment is asserted by this package.
+
+## v42: responsive layout and manga reader
+
+The fullscreen manga reader now fills the available viewport in Chrome mobile and desktop layouts, keeping the PDF-to-image panels in order without distortion. The landing page and category grids no longer expand the document beyond the device width. The tablet-width navigation changes to a compact menu when the desktop navigation cannot fit.
+
+**Root cause fixed:** the decorative 900px-wide `.ambient` layer extended a 390px mobile document to almost 1000px, causing mobile Chrome to shrink or offset the reader into a narrow strip. Viewport-aware containment and a full-width reader address this without modifying server, database, Telegram, or Caddy settings.
+
+To update an existing VPS (upload ZIP to `/root/` first):
+
+```sh
+cd /root && unzip -o Sc-Bot-Website-Responsive-v42.zip -d /root && cd /root/Sc && systemctl restart sc-miko.service
+```
+
+If you run the application manually instead of systemd, stop the service first and execute `source .venv/bin/activate && python3 miko.py`. Do not run two instances.
+
+The website stays at its existing HTTPS URL; port `1276` is the localhost backend. No package installation, virtual environment recreation, or DNS changes are needed for v42. CSS and JS asset references are versioned `?v=42` to bypass stale styles. On Chrome Android, use normal mobile mode for normal-sized typography; Desktop site mode can still make text appear smaller because the browser forces its own desktop viewport/zoom.
+
+### Responsive smoke test
+
+`python3 -m unittest discover -s tests -p 'test_responsive_v42.py' -v`
+
+The optional browser test requires Playwright and Chromium **only in the development/test environment**. It tests 360, 390, 760, 980 and 1440 CSS-pixel viewports, on homepage and reader, without any live API credentials.
 
 
-## v13 completion display
-The processing message becomes a single bold completion summary with title, chapter, page count, PDF part count, total size, and elapsed time. Each PDF is sent as a document without an additional preview-photo message.
+## v43: Automatic verified cover artwork and synopsis
 
-## v14: Manga page -> chapter range
+The website reads descriptive fields from the same published MongoDB title records
+that hold chapter references. The Telegram storage channels continue to contain
+PDFs. **No PDF/image binary content is put in MongoDB.**
 
-Send a manga landing URL such as `https://example.org/manga/example-series/` in a private chat. The bot discovers links to chapters present in the page's HTML and shows the number of chapters and a paginated list (25 per page). Select **Select Range** and send `1-20`. The bot processes chapters sequentially and uploads each PDF immediately, preserving your existing filename template, document thumbnail, and caption style. The existing single-chapter URL workflow still works.
+### Backfill existing published titles (one-time)
 
-- A maximum of 100 integer chapters per range is supported. Missing chapter numbers are reported, not guessed. Decimal chapters can appear in discovery, but are not currently selectable with the integer-range input.
-- Discovery only sees chapter links available in server-rendered HTML. JavaScript-only chapter lists, logins, and blocked websites require a separate authorized adapter. No chapter count is fabricated.
-- Only owner/admin users can request chapters. Admin access is controlled through the existing settings.
-- `/cancel` and the Cancel Download callback request cancellation of the current subprocess and stop subsequent chapters. The Telegram client may finish an upload already underway.
-- The completion message summarizes counts, pages, bytes, and elapsed time. If any chapter is missing or failed, a separate short issue report is sent.
-- Existing `config.py`, `data/settings.json`, and `.venv` are deliberately not included in this archive and are preserved when unpacking.
-- Live website and Telegram behavior has not been verified. Test with a permitted public manga series first.
+Run on your VPS inside `/root/Sc` after activating the existing `.venv`:
+
+```sh
+python3 metadata_sync.py --all --force
+```
+
+For a single existing title:
+
+```sh
+python3 metadata_sync.py --category manhwa --slug why-i-quit-being-the-demon-king --force
+```
+
+Then restart the service or refresh the website. No additional Python requirements
+are needed if v42's requirements have already been installed.
+
+### Newly uploaded titles
+
+Following successful PDF upload to the category Telegram channel and catalog
+record creation, a background worker enriches the published title automatically.
+The PDF delivery does **not wait** for metadata providers. Metadata lookups are
+rate-limited by the engine and cached: matched entries are refreshed at most
+once in 14 days, missing/failed lookups at most once in 12 hours. Refresh can be
+forced using the CLI command above. The original title, chapter list, channel
+message IDs and publish timestamps are never overwritten during enrichment.
+
+### Matching and provider policy
+
+Only titles with an **exact normalized title or listed alias** and a compatible
+content category are automatically eligible. Duplicate exact-title matches in a
+single source or missing matches are marked `needs_review` rather than guessed.
+Results are tried from AniList, MangaUpdates and MangaDex using the existing
+metadata adapter. They are merged only if title and available original-work
+identifiers do not conflict. Provider-specific source IDs and provenance are
+stored. Existing owner-curated fields remain unchanged.
+
+The frontend displays verified `cover_url`, `description`, `genres`, `status` and creators
+whenever verified metadata is available. If no approved provider provides a
+match, the site retains its neutral placeholder and displays "Synopsis not
+available from verified metadata sources yet". **Do not fabricate a poster or
+synopsis or assume an unrelated title is the correct series.** Provider APIs
+may be unavailable, rate-limited or have incomplete catalogs. Images must
+originate from allowed HTTPS artwork endpoints. The backend serves approved
+cover images as small, same-origin WebP thumbnails, optionally cached on disk
+for up to 24 hours (never in MongoDB), respecting upstream no-store headers. Follow each provider's current
+image usage and caching policies before publicly deploying the site.
+
+### Troubleshooting
+
+```sh
+python3 metadata_sync.py --category manhwa --slug why-i-quit-being-the-demon-king --force
+journalctl -u sc-miko.service -n 60 --no-pager
+```
+
+The backfill prints `matched`, `needs_review`, `skipped` or `failed` without
+printing MongoDB credentials. Check that the MongoDB URI and VPS outbound HTTPS
+access for metadata provider APIs are working. The old 1276 backend port, Caddy,
+registration, Telegram controls and PDF reader are unchanged by v43.
+
+## v44: Published catalog reliability after metadata sync
+
+v43 introduced MongoDB `metadata_lookup.attempted_at` and
+`metadata_updated_at` datetime fields. The older catalog API passed entire
+records into the JSON response while only converting `created_at` and
+`updated_at`, resulting in an unhandled `TypeError: Object of type datetime
+is not JSON serializable`. Chrome showed **Catalog temporarily unavailable**.
+
+v44 returns explicit public metadata fields only, excluding all Telegram channel
+IDs/document references, internal MongoDB IDs and metadata lookup state. Nested
+metadata timestamps are no longer included; any public date fields serialize as
+ISO 8601. The catalog now reuses a bounded MongoDB connection pool, so opening
+multiple categories no longer repeatedly creates new MongoDB clients. If one
+category database is temporarily unavailable, the main feed shows available
+stories with a clear partial-availability warning; a failed single-category
+request returns HTTP 503 so users don't mistake it for an empty category.
+
+**The Manga category showing 0 stories is normal if only a Manhwa was
+published.** A Manga upload will appear in the Manga category when published.
+
+### Deploy (no Python dependency changes)
+
+Upload `Sc-Bot-Website-Catalog-Fixed-v44.zip` to `/root` on the VPS, then:
+
+```sh
+cd /root && unzip -o Sc-Bot-Website-Catalog-Fixed-v44.zip -d /root && cd /root/Sc && systemctl restart sc-miko.service
+```
+
+Wait a few seconds for startup and check:
+
+```sh
+curl -fsS 'http://127.0.0.1:1276/api/catalog?category=manhwa'
+journalctl -u sc-miko.service -n 40 --no-pager
+```
+
+Use the public Caddy HTTPS hostname to view the website. No PDF files or MongoDB
+records need to be deleted, and metadata backfill does **not** need to run again.
+This patch does not change storage channel mappings, Telegram publishing, or the
+reader cache. If a metadata provider could not verify a title, artwork and
+synopsis will remain unavailable until a valid metadata match is found.
+
+Local validation: `python3 -m unittest discover -s tests` (optional extras may be
+skipped when unavailable). No live VPS/MongoDB/provider access was used to test
+this patch.
+
+## v45: Resilient Chapter Reader (interrupted connection / Chapter 20)
+
+The reader previously **stopped immediately** and left an empty reading page if
+one `/api/chapter` fetch failed (e.g., a transient mobile connection drop, an
+upstream proxy error, or an unexpected server-side exception). The API could
+also close a connection without JSON when chapter storage references were
+malformed. These issues could display `Connection failed` instead of a useful
+error.
+
+v45 introduces **bounded retry** for reader GET requests (never retries
+login/signup POSTs), a visible `Retry chapter` action, retry-once for
+individual page images, and server-side JSON error responses for unexpected
+reader errors. The HTTP accept queue is larger for bursts of page-image
+requests. PDF conversion is limited to one background job at a time to avoid
+competing CPU/memory spikes. Malformed Telegram storage references now report
+a controlled error instead of causing an uncaught exception. Existing chapter
+IDs, Telegram file storage, MongoDB metadata and cached pages are untouched.
+
+### Update an existing VPS
+
+The ZIP contains **no `config.py` or MongoDB secrets**. Upload it to `/root/`
+and run:
+
+```bash
+cd /root && unzip -o Sc-Bot-Website-Reader-Connection-v45.zip -d /root && cd /root/Sc && systemctl restart sc-miko.service
+```
+
+No new packages or virtual environment are required. Wait a few seconds after
+restart; then refresh the chapter reader in mobile Chrome. Check the website
+health locally via `curl -fsS http://127.0.0.1:1276/api/health`.
+
+For the Chapter 20 issue, if the error continues, inspect **redacted** reader
+logs (avoid exposing bot tokens):
+
+```bash
+journalctl -u sc-miko.service --no-pager -n 100 | grep -E 'Reader|reader|Chapter|chapter|Unexpected'
+```
+
+If the response says a PDF is missing or storage references are incomplete,
+check the configured storage channel and that the specified chapter was
+actually published; a browser fix cannot reconstruct absent Telegram files.
+No change to Caddy, firewall, MongoDB collections or user credentials is made.
+
+### Local tests
+
+`python3 -m unittest discover -s tests -v` (full suite). Regression cases in
+`tests/test_reader_v45.py` simulate failed browser requests and malformed
+backend chapter records without using private user data. The code has not been
+deployed to the user's live VPS; real Telegram chapter retrieval requires a
+post-update check.
 
 
-## v15 update
+## v46: Tap-to-scroll on the manga reader
 
-- The chapter range prompt is edited into the batch progress message; no extra batch-start message is sent during normal operation.
-- The batch completion summary has grouped fields and human-readable elapsed time.
-- Original JPEG and PNG page bytes are retained, with no lossy recompression or resizing. Other formats convert to lossless PNG for PDF compatibility. PDF assembly may still increase file size.
-- Existing PDF splitting and Telegram thumbnail/caption settings remain available.
-- Reuse the existing `.venv`; dependencies are unchanged.
+The manga reader supports one-tap navigation when chapter images are loaded:
 
-## v16 - Failed chapter recovery
+- Tap the **left half of a manga image** to scroll **down** roughly 72% of the visible screen.
+- Tap the **right half of a manga image** to scroll **up** by the same amount.
+- Normal finger swipes, mouse-wheel scrolling, and pinch zoom continue working.
+- Long presses and drag gestures do not trigger the tap navigation. The chapter header and Back to Chapters links are unaffected.
+- The reader displays a small instruction hint; other pages have no tap-navigation behavior.
 
-- Each failed chapter is retried up to three times with short backoff.
-- The final batch message lists failed chapter numbers and error details when available.
-- `Retry Failed` processes only the failed chapters from the latest batch in the same bot session.
-- The summary is edited in place; no separate chapter-issues message is sent.
-- The retry list is in memory and is lost after bot restart.
-- A network failure during Telegram upload can be ambiguous: check whether a PDF was delivered before retrying to avoid duplicates.
-- No new Python dependencies; keep your existing `.venv` and `config.py`.
+### Deploy on an existing VPS
 
-## MangaDass adapter (v17)
+Upload `Sc-Bot-Website-Tap-Scroll-v46.zip` to `/root/`, then:
 
-MangaDass landing pages are supported by a dedicated chapter-link discovery adapter.
-Send `https://mangadass.com/manga/soul-land-iv-the-ultimate-combat` to the bot,
-then choose a chapter range. Only chapter links found in the public HTML are
-included; decimal chapter numbers are preserved. Reader image detection uses
-site-specific selectors with the existing generic fallback. Existing PDF
-naming, thumbnail, sequential delivery, retry and cancellation remain intact.
+```sh
+cd /root && unzip -o Sc-Bot-Website-Tap-Scroll-v46.zip -d /root && cd /root/Sc && systemctl restart sc-miko.service
+```
 
-**Limitations:** Live MangaDass access was not verified in this build. If the
-site loads chapter links or images only via JavaScript, requires authentication,
-or blocks automated access, discovery/extraction may fail. The bot does not
-bypass these restrictions. Use only for material you are authorized to download.
+No Python dependency changes, new virtual environment, MongoDB migration,
+Caddy changes, or channel reconfiguration are required. The existing
+`config.py`, `.venv`, and `data/` are not contained in this update.
+
+Regression test: `python3 -m unittest discover -s tests -p 'test_tap_scroll_v46.py' -v`.
+
+## v47: Storage-to-website publishing recovery
+
+Adult-category uploads are published only after copying the complete PDF into
+that category's Telegram storage channel **and** saving the chapter reference
+in MongoDB. Completion messages explicitly report website-publishing status.
+For diagnostics and restoration of previously uploaded channel PDFs, see
+[docs/PUBLISHING_RECOVERY.md](docs/PUBLISHING_RECOVERY.md).
+
+Check a category:
+
+```sh
+.venv/bin/python3 publication_check.py --category adult_manhwa
+```
+
+Dry run a repair, then apply it to the selected storage channel:
+
+```sh
+.venv/bin/python3 storage_sync.py --category adult_manhwa
+.venv/bin/python3 storage_sync.py --category adult_manhwa --apply
+```

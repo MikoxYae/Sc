@@ -76,13 +76,52 @@ class MetadataEngine:
         return out
 
     def mangaupdates(self, query):
-        data=self.request('mangaupdates','POST','https://api.mangaupdates.com/v1/series/search',json={'search':query,'perpage':8})
+        """Public series search with optional details for an exact title match.
+
+        MangaUpdates may require authorization or throttle some endpoints;
+        search remains usable when the per-series detail request is denied.
+        """
+        data=self.request('mangaupdates','POST','https://api.mangaupdates.com/v1/series/search',
+                          json={'search':query,'perpage':8})
         out=[]
         for entry in data.get('results') or []:
             item=entry.get('record') or {}
             title=item.get('title')
             if not title:continue
-            out.append({'title':title,'original_title':None,'alternative_titles':[], 'description':None,'cover':(item.get('image') or {}).get('url',{}).get('original') if isinstance((item.get('image') or {}).get('url'),dict) else None,'genres':[], 'authors':[], 'artists':[], 'status':'Unknown','chapters':None,'content_rating':None,'type':'Other','sources':{'mangaupdates':item.get('series_id')},'source_urls':{'mangaupdates':item.get('url')},'provider':'mangaupdates'})
+            full=item
+            sid=item.get('series_id')
+            if sid and normalize(query)==normalize(title):
+                try:
+                    details=self.request('mangaupdates','GET',f'https://api.mangaupdates.com/v1/series/{int(sid)}')
+                    if isinstance(details,dict) and normalize(details.get('title',''))==normalize(title):
+                        full=details
+                except (ProviderError, ValueError):
+                    pass
+            url=((full.get('image') or {}).get('url') or {})
+            image=url.get('original') or url.get('thumb') if isinstance(url,dict) else url if isinstance(url,str) else None
+            authors=[];artists=[]
+            for person in full.get('authors') or []:
+                if not isinstance(person,dict):continue
+                value=person.get('name')
+                if value:
+                    (artists if 'artist' in str(person.get('type','')).lower() else authors).append(value)
+            alternative=[a.get('title') for a in full.get('associated') or [] if isinstance(a,dict) and a.get('title')]
+            raw_type=str(full.get('type') or '').lower()
+            media_type={'manhwa':'Manhwa','manhua':'Manhua','manga':'Manga','webtoon':'Webtoon'}.get(raw_type,'Other')
+            genres=[]
+            for g in full.get('genres') or []:
+                name=g.get('genre') if isinstance(g,dict) else g if isinstance(g,str) else None
+                if name:genres.append(name)
+            desc=full.get('description')
+            raw_year=full.get('year')
+            try:year=int(raw_year) if raw_year else None
+            except (ValueError,TypeError):year=None
+            out.append({'title':title,'original_title':None,'alternative_titles':alternative,
+                        'description':desc if isinstance(desc,str) else None,'cover':image,
+                        'genres':genres,'authors':authors,'artists':artists,'status':'Unknown',
+                        'chapters':None,'content_rating':None,'type':media_type,'year':year,
+                        'sources':{'mangaupdates':sid},'source_urls':{'mangaupdates':full.get('url') or item.get('url')},
+                        'provider':'mangaupdates'})
         return out
 
     def search(self, query):
