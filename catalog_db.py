@@ -56,7 +56,7 @@ PUBLIC_TITLE_PROJECTION = {
     '_id': 0, 'slug': 1, 'title': 1, 'category': 1,
     'created_at': 1, 'updated_at': 1,
     'chapters.number': 1, 'chapters.title': 1,
-    'cover_url': 1, 'description': 1, 'genres': 1,
+    'cover_url': 1, 'cover_local': 1, 'description': 1, 'genres': 1,
     'authors': 1, 'artists': 1, 'status': 1, 'year': 1,
     'rating': 1, 'original_title': 1, 'alternative_titles': 1,
     'metadata_source_urls': 1,
@@ -86,6 +86,8 @@ def public_title(doc, category):
         raise ValueError('Invalid catalog record')
     allowed = {key.split('.')[0] for key in PUBLIC_TITLE_PROJECTION if key != '_id'}
     safe = {key: value for key, value in doc.items() if key in allowed and key != 'chapters'}
+    safe['has_cover'] = bool(safe.get('cover_url') or safe.get('cover_local'))
+    safe.pop('cover_local', None)
     safe['category'] = category
     for key in ('created_at', 'updated_at'):
         if isinstance(safe.get(key), datetime):

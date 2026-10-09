@@ -9,8 +9,10 @@ import hashlib
 import io
 import logging
 import os
+import re
 import threading
 import time
+from urllib.parse import urljoin
 from pathlib import Path
 
 import requests
@@ -24,6 +26,18 @@ MAX_IMAGE_BYTES = 8 * 1024 * 1024
 TTL_SECONDS = 86400
 _LOCK = threading.Lock()
 Image.MAX_IMAGE_PIXELS = 25_000_000
+
+OWNER_COVERS = Path(__file__).resolve().parent / 'data' / 'cover_uploads'
+
+def owner_cover_bytes(filename: str) -> bytes:
+    """Serve only converted owner-uploaded covers under the private data tree."""
+    if not isinstance(filename,str) or not re.fullmatch(r'[a-z0-9][a-z0-9_-]{0,200}\.webp', filename):
+        raise ValueError('Invalid custom cover')
+    p = OWNER_COVERS / filename
+    if not p.is_file() or p.stat().st_size > MAX_IMAGE_BYTES:
+        raise FileNotFoundError('Custom cover missing')
+    return p.read_bytes()
+
 
 
 def cover_bytes(url: str, *, session=None) -> bytes:
@@ -39,9 +53,19 @@ def cover_bytes(url: str, *, session=None) -> bytes:
             return cache.read_bytes()
         client = session or requests
         try:
-            response = client.get(url, stream=True, allow_redirects=False,
-                                  headers={'User-Agent': 'ScCatalog/1.0', 'Accept': 'image/*'},
-                                  timeout=(5, 15))
+            request_url = url
+            for redirect_count in range(3):
+                response = client.get(request_url, stream=True, allow_redirects=False,
+                                      headers={'User-Agent': 'ScCatalog/1.0', 'Accept': 'image/*'},
+                                      timeout=(5, 15))
+                if response.is_redirect:
+                    new_url = urljoin(request_url, response.headers.get('Location',''))
+                    response.close()
+                    if not valid_cover(new_url) or redirect_count == 2:
+                        raise ValueError('Cover redirect to unapproved provider host')
+                    request_url = new_url
+                    continue
+                break
             try:
                 response.raise_for_status()
                 if response.is_redirect:

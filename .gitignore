@@ -65,3 +65,9 @@ output/
 .certs/
 .cache/
 *.zip
+
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/

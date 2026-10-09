@@ -41,7 +41,9 @@ def main(argv=None):
             if outcome['status'] in ('needs_review', 'failed'):
                 print('  ' + outcome.get('reason', 'Unknown error')[:120], flush=True)
             elif outcome['status'] == 'matched':
-                print('  providers=' + ','.join(outcome.get('providers', [])) + '; updated=' + ','.join(outcome.get('fields', [])), flush=True)
+                print('  providers=' + ','.join(outcome.get('providers', [])) + '; updated=' + ','.join(outcome.get('fields', [])) +
+                      '; cover=' + ('yes' if outcome.get('cover') else 'missing') +
+                      '; synopsis=' + ('yes' if outcome.get('synopsis') else 'missing'), flush=True)
     print(f'Checked {completed} published titles; PDF and Telegram files unchanged.')
 
 

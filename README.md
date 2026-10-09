@@ -9,7 +9,7 @@ The application preserves its original manga scraper, PDF conversion, Telegram c
 Upload the ZIP into `/root/` and run:
 
 ```sh
-cd /root && unzip -o Sc-Bot-Website-Reader-Connection-v45.zip -d /root && cd /root/Sc && systemctl restart sc-miko.service
+cd /root && unzip -o Sc-Bot-Website-Adult-Reader-v48.zip -d /root && cd /root/Sc && systemctl restart sc-miko.service
 ```
 
 This reuses the existing virtual environment and dependencies. Only install requirements if the environment is new or missing packages. The setup does not install Docker, kill other bots, or alter unrelated Docker containers. The Caddy config is backed up before changes.
@@ -258,3 +258,79 @@ Dry run a repair, then apply it to the selected storage channel:
 .venv/bin/python3 storage_sync.py --category adult_manhwa
 .venv/bin/python3 storage_sync.py --category adult_manhwa --apply
 ```
+
+## v48: 18+ chapter reader (previous permanent block removed)
+
+An adult story previously responded to `/api/chapter` and `/api/chapter/page` with
+`403 Adult reader requires age verification; not enabled yet` indefinitely.
+The reader now shows a one-time **I am 18+ — Continue** button. A visitor who
+confirms 18+ can read the chapter normally; confirmation lasts 30 days on that
+browser. Neither login nor MongoDB changes are required. The PDF remains on
+Telegram, is rendered on the VPS, and is not stored as a MongoDB blob.
+
+The confirmation is a **self-declaration**, not ID verification. If local laws
+require independent age verification, connect an appropriate compliant provider
+before publishing adult content. The adult chapter and individual page API
+endpoints enforce a signed cookie. The signing secret is generated on first
+use in `data/.adult_confirm_key` (mode 0600). Keep `data/` private and backed up
+when rotating VPS instances. Do not commit it.
+
+Verify after deployment: open an 18+ Manhwa chapter in Chrome via HTTPS, choose
+**I am 18+ — Continue**, wait for the Telegram PDF conversion, and scroll
+through the pages. Reopen the same chapter; the confirmation should be retained.
+General Manga/Manhwa chapters are unaffected.
+
+Run the isolated regression tests with:
+
+```sh
+cd /root/Sc && .venv/bin/python3 -m unittest discover -s tests -p 'test_adult_reader_v48.py' -v
+```
+
+If using the systemd service, do not also start `python3 miko.py` manually.
+
+
+## Reader download / speed (v49)
+
+PDFs remain in Telegram storage. The website can use the fast Bot API for permitted small PDFs and MTProto for larger PDFs, and now serves rendered pages progressively. See [Reader v49 guide](docs/READER_V49.md) for setup, status and diagnostics.
+
+## v50 metadata improvements
+
+For verified alternate-title search, existing-series poster backfill, and
+owner-controlled cover/synopsis updates see [Metadata v50](docs/METADATA_V50.md).
+
+
+## v51: Universal cover and synopsis enrichment (all seven categories)
+
+The same verified metadata workflow applies to Manga, Manhwa, Manhua, Webtoon,
+18+ Manga, 18+ Manhwa, and 18+ Webtoon. The category database structure is
+unchanged. For 18+ entries MangaDex is queried with its *explicit* full
+content-rating filter, including pornographic entries, rather than the default
+non-adult set. This only affects metadata discovery, not public age access.
+
+Refresh all existing published titles: 
+
+```sh
+cd /root/Sc
+.venv/bin/python3 metadata_sync.py --all --force
+```
+
+For titles where no provider has an exact-name match, the owner can supply a
+verified alternate search title without altering the displayed series name:
+
+```sh
+.venv/bin/python3 metadata_override.py --category adult_webtoon \
+ --slug example-series --search-title 'Verified Alternate Title'
+.venv/bin/python3 metadata_sync.py --category adult_webtoon --slug example-series --force
+```
+
+An owner-supplied synopsis (`--synopsis-file`) or licensed poster
+(`--cover-file`) can be attached to **any** published category if providers do
+not supply them. The operator must have rights to use the image and text.
+Only image URLs/filenames and metadata are stored in MongoDB; PDFs remain in
+Telegram. A `matched` result reports whether both `cover` and `synopsis` were
+found. `needs_review` means no confident same-work match exists; do not
+assign a random similarly named book's cover.
+
+**Deployment:** Unzip the v51 release over `/root/Sc`, run the metadata sync,
+then restart `sc-miko.service`. Keep existing `config.py`, credentials,
+Telegram channel references and `/root/Sc/data` untouched.

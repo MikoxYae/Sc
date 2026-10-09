@@ -799,7 +799,7 @@ async def process_one(update, context, url, progress_message=None, batch_mode=Fa
                         if channel and category:
                             try:
                                 copied = await context.bot.copy_message(chat_id=channel, from_chat_id=sent.chat_id, message_id=sent.message_id)
-                                channel_messages.append({'message_id': copied.message_id, 'file_id': sent.document.file_id, 'filename': filename})
+                                channel_messages.append({'message_id': copied.message_id, 'file_id': sent.document.file_id, 'file_size': sent.document.file_size, 'filename': filename})
                                 # Persist each completed Telegram copy before attempting the MongoDB write.
                                 # Interrupted multipart chapters remain non-publishable until all parts exist.
                                 from publish_recovery import record
@@ -822,6 +822,17 @@ async def process_one(update, context, url, progress_message=None, batch_mode=Fa
                                                 image_count, channel, channel_messages)
                         website_published = True
                         await asyncio.to_thread(forget, category, title, chapter)
+                        # Stage original page images while the scraper temp dir exists.
+                        # The reader then publishes WebP pages one by one in the background;
+                        # future visitors won't re-download the complete Telegram PDF.
+                        try:
+                            from chapter_reader import seed_uploaded_chapter
+                            await asyncio.to_thread(
+                                seed_uploaded_chapter, category, title, chapter, channel,
+                                channel_messages, Path(tmp) / 'images')
+                        except Exception:
+                            LOG.warning('Reader pre-warm unavailable; PDF fallback remains usable',
+                                        exc_info=True)
                         LOG.info('WEBSITE PUBLISHED: category=%s title=%s chapter=%s parts=%s',
                                  category, title, chapter, len(channel_messages))
                     except Exception:

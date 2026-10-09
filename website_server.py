@@ -10,6 +10,7 @@ from catalog_db import public_catalog,CATEGORIES,collection,public_title,PUBLIC_
 import web_auth
 import chapter_reader
 import cover_proxy
+import adult_access
 LOG=logging.getLogger('Sc.website');ROOT=Path(__file__).resolve().parent/'website'
 
 def _json_default(value):
@@ -22,16 +23,21 @@ class Handler(SimpleHTTPRequestHandler):
     def end_headers(self):
         self.send_header('X-Content-Type-Options','nosniff')
         self.send_header('Referrer-Policy','strict-origin-when-cross-origin')
-        self.send_header('Cache-Control','no-store' if self.path.startswith('/api/') else 'public, max-age=120')
+        self.send_header('Cache-Control','no-store' if self.path.startswith('/api/') or self.path.split('?', 1)[0] in ('/', '/index.html') else 'public, max-age=120')
         super().end_headers()
     def log_message(self,fmt,*args):LOG.info('Website: '+fmt,*args)
     def respond(self,code,obj,extra=None):
         raw=json.dumps(obj,ensure_ascii=False,default=_json_default).encode();self.send_response(code);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Content-Length',str(len(raw)))
         for k,v in (extra or {}).items():self.send_header(k,v)
         self.end_headers();self.wfile.write(raw)
+    def cookie_value(self, name):
+        try:
+            morsel = SimpleCookie(self.headers.get('Cookie', '')).get(name)
+            return morsel.value if morsel is not None else ''
+        except (AttributeError, ValueError):
+            return ''
     def token(self):
-        try:return SimpleCookie(self.headers.get('Cookie','')).get('sc_session').value
-        except (AttributeError,ValueError):return ''
+        return self.cookie_value('sc_session')
     def do_GET(self):
         u=urllib.parse.urlsplit(self.path)
         if u.path=='/api/health':
@@ -45,10 +51,15 @@ class Handler(SimpleHTTPRequestHandler):
                 col=collection(cat)
                 if col is None:return self.respond(503,{'error':'Catalog unavailable'})
                 doc=col.find_one({'slug':slug,'published':True,'chapters.0':{'$exists':True}},
-                                 {'_id':0,'cover_url':1})
-                if not doc or not cover_proxy.valid_cover(doc.get('cover_url')):
+                                 {'_id':0,'cover_url':1,'cover_local':1})
+                if not doc:
+                    return self.respond(404,{'error':'Cover unavailable'})
+                if doc.get('cover_local'):
+                    picture=cover_proxy.owner_cover_bytes(doc['cover_local'])
+                elif cover_proxy.valid_cover(doc.get('cover_url')):
+                    picture=cover_proxy.cover_bytes(doc['cover_url'])
+                else:
                     return self.respond(404,{'error':'No verified cover available'})
-                picture=cover_proxy.cover_bytes(doc['cover_url'])
                 self.send_response(200)
                 self.send_header('Content-Type','image/webp')
                 self.send_header('Content-Length',str(len(picture)))
@@ -87,13 +98,17 @@ class Handler(SimpleHTTPRequestHandler):
             cat=q.get('category',[''])[0];slug=q.get('slug',[''])[0];num=q.get('chapter',[''])[0]
             try:
                 chapter_reader.validate(cat,slug,num)
-                # Adult reading stays restricted until age verification is implemented.
-                if cat.startswith('adult_'):
-                    return self.respond(403,{'error':'Adult reader requires age verification; not enabled yet'})
+                # Working 18+ confirmation, not an unimplemented permanent block.
+                # Check both the chapter manifest AND the actual image endpoint.
+                if cat.startswith('adult_') and not adult_access.valid(
+                        self.cookie_value(adult_access.COOKIE_NAME)):
+                    return self.respond(403, {
+                        'error': 'Please confirm you are 18 or older to read this chapter.',
+                        'code': 'adult_confirmation_required',
+                    })
                 if u.path=='/api/chapter':
                     return self.respond(200,chapter_reader.prepare(cat,slug,num))
                 page=q.get('page',[''])[0]
-                chapter_reader.chapter_record(cat,slug,num)
                 path=chapter_reader.page_path(cat,slug,num,page)
                 data=path.read_bytes()
                 self.send_response(200)
@@ -124,12 +139,14 @@ class Handler(SimpleHTTPRequestHandler):
                 and self.client_address[0] in ('127.0.0.1', '::1')
                 and self.headers.get('X-Forwarded-Proto', '').lower() == 'https')
     def do_POST(self):
-        if self.path not in ('/api/register','/api/login','/api/logout'):return self.respond(404,{'error':'Not found'})
+        if self.path not in ('/api/register','/api/login','/api/logout','/api/age/confirm'):return self.respond(404,{'error':'Not found'})
         if not isinstance(self.connection, ssl.SSLSocket) and not self.proxy_https():
             return self.respond(403,{'error':'Sign in requires HTTPS. Configure SC_TLS_CERT and SC_TLS_KEY.'})
         # Cross-origin writes blocked; deployment must use HTTPS reverse proxy.
         origin=self.headers.get('Origin','');host=self.headers.get('Host','')
         if origin and urllib.parse.urlsplit(origin).netloc!=host:return self.respond(403,{'error':'Invalid origin'})
+        if self.headers.get('Sec-Fetch-Site', '').lower() not in ('', 'same-origin', 'none'):
+            return self.respond(403, {'error': 'Invalid request origin'})
         try:
             length=int(self.headers.get('Content-Length','0') or '0')
         except (ValueError,TypeError):
@@ -138,6 +155,15 @@ class Handler(SimpleHTTPRequestHandler):
         try:
             payload=json.loads(self.rfile.read(length))
             if not isinstance(payload,dict):raise ValueError('Invalid request data')
+            if self.path == '/api/age/confirm':
+                # Simple self-declaration only; no ID, account or personal data collected.
+                if payload.get('over_18') is not True:
+                    return self.respond(400, {'error': 'You must confirm you are 18 or older.'})
+                secure = isinstance(self.connection, ssl.SSLSocket) or self.proxy_https()
+                token = adult_access.issue()
+                return self.respond(200, {'ok': True, 'confirmed': True}, {
+                    'Set-Cookie': adult_access.cookie(token, secure=secure)
+                })
             if self.path=='/api/logout':
                 web_auth.logout(self.token());return self.respond(200,{'ok':True},{'Set-Cookie':'sc_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0'})
             email=payload.get('email','');password=payload.get('password','')

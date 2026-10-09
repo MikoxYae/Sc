@@ -6,7 +6,7 @@ const names={manga:'Manga',manhwa:'Manhwa',webtoon:'Webtoon',manhua:'Manhua',adu
 let state={page:1,filter:'',query:'',user:null,items:[],loading:false};
 let catalogRequest=0;
 let readerRequest=0;
-const cover=x=>x.cover_url
+const cover=x=>(x.has_cover||x.cover_url)
  ? `<img class="cover-art" loading="lazy" decoding="async" src="/api/cover?category=${encodeURIComponent(x.category)}&slug=${encodeURIComponent(x.slug)}" alt="Cover artwork for ${esc(x.title)}" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="cover-placeholder" hidden>MIKO</span>`
  : '<span class="cover-placeholder">MIKO</span>';
 function card(x){const fresh=x.updated_at&&Date.now()-Date.parse(x.updated_at)<86400000;return `<a class="card" href="#/title/${esc(x.category)}/${encodeURIComponent(x.slug)}"><div class="cover">${cover(x)}${fresh?'<span class="new-label">NEW</span>':''}</div><div class="card-info"><h3>${esc(x.title)}</h3><div class="meta">${small(names[x.category]||x.category)} · ${x.chapters?.length||0} ${small('chapters')}</div></div></a>`}
@@ -46,6 +46,7 @@ async function api(path,opts={}){
    }
    const error=Error(d.error||'Request failed (HTTP '+r.status+').');
    error.httpStatus=r.status;
+   error.code=d.code||'';
    throw error;
   }
   return d;
@@ -70,7 +71,33 @@ function readerFailure(cat,slug,chapter,message){
  action.onclick=()=>readerPage(cat,slug,chapter);
  status.append(description,action);
 }
-// Reader tap navigation: LEFT half scrolls DOWN, RIGHT half scrolls UP.
+// A simple first-party 18+ acknowledgement replaces the old permanent 403.
+// It does not collect identity documents or pretend to independently verify age.
+function showAdultConfirmation(cat,slug,chapter){
+ const status=$('readerStatus');
+ if(!status)return;
+ status.hidden=false;
+ status.replaceChildren();
+ const panel=document.createElement('section');
+ panel.className='adult-confirmation';
+ panel.setAttribute('aria-labelledby','adultConfirmTitle');
+ panel.innerHTML=`<span class="adult-confirm-label">18+ ${small('Restricted content')}</span><h2 id="adultConfirmTitle">${small('Adults only')}</h2><p>${small('This chapter is intended for adults aged 18 or older. Confirm your age to continue reading.')}</p><div class="adult-confirm-actions"><button type="button" class="adult-confirm-yes">${small('I am 18+ — Continue')}</button><a class="adult-confirm-back" href="#/title/${encodeURIComponent(cat)}/${encodeURIComponent(slug)}">${small('Back to chapters')}</a></div><p class="adult-confirm-feedback" role="alert" aria-live="polite"></p>`;
+ status.appendChild(panel);
+ const button=panel.querySelector('.adult-confirm-yes');
+ const feedback=panel.querySelector('.adult-confirm-feedback');
+ button.onclick=async()=>{
+  button.disabled=true;
+  feedback.textContent=small('Saving confirmation...');
+  try{
+   await api('age/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({over_18:true})});
+   readerPage(cat,slug,chapter);
+  }catch(error){
+   feedback.textContent=error.message;
+   button.disabled=false;
+  }
+ };
+}
+// Reader tap navigation: LEFT half scrolls UP, RIGHT half scrolls DOWN.
 // Keep normal swipe scrolling intact; do not treat drags or long presses as taps.
 function bindReaderTapScroll(container){
  let press=null;
@@ -102,7 +129,7 @@ function bindReaderTapScroll(container){
   const viewportHeight=window.visualViewport?.height||window.innerHeight;
   const distance=Math.max(220,Math.round(viewportHeight*.72));
   const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  window.scrollBy({top:right?-distance:distance,behavior:reduced?'auto':'smooth'});
+  window.scrollBy({top:right?distance:-distance,behavior:reduced?'auto':'smooth'});
  },{passive:true});
 }
 async function readerPage(cat,slug,chapter){
@@ -110,49 +137,95 @@ async function readerPage(cat,slug,chapter){
  const target=$('routePage');
  const back=`#/title/${encodeURIComponent(cat)}/${encodeURIComponent(slug)}`;
  const query=new URLSearchParams({category:cat,slug,chapter});
- target.innerHTML=`<section class="reader-shell"><div class="reader-toolbar"><a href="${back}">← ${small('Chapters')}</a><strong>${small('Chapter')} ${esc(chapter)}</strong><span id="readerCount"></span></div><div class="reader-tap-hint" aria-label="Tap left to scroll down. Tap right to scroll up.">${small('Left tap: down  |  Right tap: up')}</div><div id="readerStatus" class="catalog-state" role="status" aria-live="polite">${small('Preparing chapter...')}</div><div id="readerPages" class="reader-images"></div><a class="reader-bottom" href="${back}">← ${small('Back to chapters')}</a></section>`;
- bindReaderTapScroll($('readerPages'));
+ target.innerHTML=`<section class="reader-shell"><div class="reader-toolbar"><a href="${back}">← ${small('Chapters')}</a><strong>${small('Chapter')} ${esc(chapter)}</strong><span id="readerCount"></span></div><div class="reader-tap-hint" aria-label="Tap left to scroll up. Tap right to scroll down.">${small('Left tap: up  |  Right tap: down')}</div><div id="readerStatus" class="catalog-state reader-progress" role="status" aria-live="polite"><b>${small('Preparing chapter...')}</b><div class="reader-progress-track"><div id="readerProgressBar" class="reader-progress-bar"></div></div><span id="readerProgressText">${small('Connecting to Telegram storage...')}</span></div><div id="readerPages" class="reader-images"></div><a class="reader-bottom" href="${back}">← ${small('Back to chapters')}</a></section>`;
+ const pages=$('readerPages');
+ bindReaderTapScroll(pages);
  const status=$('readerStatus');
- for(let attempt=0;attempt<45;attempt++){
+ let appended=0;
+ const appendPages=(targetCount)=>{
+  const total=Math.max(0,Math.min(600,Number(targetCount)||0));
+  if(total<=appended)return;
+  const fragment=document.createDocumentFragment();
+  for(let n=appended+1;n<=total;n++){
+   const image=document.createElement('img');
+   image.loading=n<=2?'eager':'lazy';
+   image.decoding='async';
+   image.alt='Page '+n;
+   const source='/api/chapter/page?'+query.toString()+'&page='+n;
+   image.onerror=()=>{
+    const tries=Number(image.dataset.retries||0);
+    if(tries>=2)return;
+    image.dataset.retries=String(tries+1);
+    setTimeout(()=>{if(image.isConnected && id===readerRequest)image.src=source+'&retry='+String(tries+1);},1300*(tries+1));
+   };
+   image.src=source;
+   fragment.appendChild(image);
+  }
+  pages.appendChild(fragment);
+  appended=total;
+ };
+ const showProgress=(result)=>{
+  if(!status || status.hidden)return;
+  const text=$('readerProgressText');
+  const bar=$('readerProgressBar');
+  const stage=result.stage||'queued';
+  let message='Preparing chapter...';
+  let percentage=0;
+  if(stage==='queued'){message='Waiting for reader worker...';}
+  if(stage==='connecting'){message='Connecting to Telegram storage...';}
+  if(stage==='downloading'){
+   const part=Number(result.part||1),total=Number(result.parts||1);
+   const bytes=Number(result.downloaded_bytes||0),size=Number(result.download_total||0);
+   message=`Downloading PDF ${part}/${total}`;
+   if(size>0){percentage=Math.min(100,Math.round(bytes/size*100));message+=` · ${percentage}%`;}
+  }
+  if(stage==='rendering'){
+   const done=Number(result.pages_ready||0),total=Number(result.pages_total||0);
+   message=`Preparing page ${done}/${total||'...'} · You can read available pages now`;
+   if(total>0)percentage=Math.min(100,Math.round(done/total*100));
+  }
+  if(text)text.textContent=small(message);
+  if(bar)bar.style.width=percentage+'%';
+  const ready=Number(result.pages_ready||0);
+  if(ready>0)appendPages(ready);
+  if(ready>0){
+   $('readerCount').textContent=ready+'/'+(result.pages_total||'?')+' '+small('pages');
+   status.classList.add('reader-loading-compact');
+   const title=status.querySelector('b');
+   if(title)title.textContent=small('Keep reading - more pages are loading');
+  }
+ };
+ // Rendering is progressive: readers can see page 1 while the rest renders.
+ // The server can be slow downloading very large chapters, so do not impose
+ // the old artificial 225-second frontend cutoff.
+ const deadline=Date.now()+25*60*1000;
+ while(Date.now()<deadline){
   if(id!==readerRequest || !location.hash.startsWith('#/read/'))return;
   try{
-   const result=await api('chapter?'+query.toString(),{retries:2,timeoutMs:17000});
+   const result=await api('chapter?'+query.toString(),{retries:2,timeoutMs:20000});
    if(id!==readerRequest || !location.hash.startsWith('#/read/'))return;
    if(result.status==='error')throw Error(result.error||'Chapter is temporarily unavailable.');
    if(result.status==='ready'){
     const count=Math.min(Number(result.pages)||0,600);
     if(count<1)throw Error('No readable pages were found for this chapter.');
+    appendPages(count);
     $('readerCount').textContent=count+' '+small('pages');
     status.hidden=true;
-    const container=$('readerPages');
-    container.replaceChildren();
-    const fragment=document.createDocumentFragment();
-    for(let n=1;n<=count;n++){
-     const img=document.createElement('img');
-     img.loading=n<=2?'eager':'lazy';img.decoding='async';
-     img.alt='Page '+n;
-     const source='/api/chapter/page?'+query.toString()+'&page='+n;
-     // One reconnect attempt for images affected by an intermittent connection.
-     img.onerror=()=>{
-      if(img.dataset.retried)return;
-      img.dataset.retried='1';
-      setTimeout(()=>{if(img.isConnected)img.src=source+'&retry=1';},1200);
-     };
-     img.src=source;
-     fragment.appendChild(img);
-    }
-    container.appendChild(fragment);
     return;
    }
-   status.textContent=small('Downloading and preparing pages. Please wait...');
+   showProgress(result);
   }catch(err){
    if(id!==readerRequest)return;
-   readerFailure(cat,slug,chapter,err.message);
+   if(err.code==='adult_confirmation_required'){
+    showAdultConfirmation(cat,slug,chapter);
+   }else{
+    readerFailure(cat,slug,chapter,err.message);
+   }
    return;
   }
-  await wait(5000);
+  await wait(appended<3?1200:2300);
  }
- if(id===readerRequest)readerFailure(cat,slug,chapter,'Reader preparation timed out. Tap Retry to try again.');
+ if(id===readerRequest)readerFailure(cat,slug,chapter,'Chapter is taking too long. Tap Retry to check again.');
 }
 function route(){let h=decodeURIComponent(location.hash||'#/');const cat=h.match(/^#\/category\/(manga|manhwa|manhua|webtoon|adult_manga|adult_manhwa|adult_webtoon)/),title=h.match(/^#\/title\/(manga|manhwa|manhua|webtoon|adult_manga|adult_manhwa|adult_webtoon)\/(.+)$/),read=h.match(/^#\/read\/(manga|manhwa|manhua|webtoon|adult_manga|adult_manhwa|adult_webtoon)\/([^/]+)\/(.+)$/);const auth=h.match(/^#\/auth\/(login|signup)$/),profile=h==='#/profile';const home=!cat&&!title&&!read&&!auth&&!profile;document.body.classList.toggle('reader-mode',Boolean(read));document.documentElement.classList.toggle('reader-mode',Boolean(read));$('homeContent').hidden=!home;$('routePage').hidden=home;$('nav').classList.remove('open');$('menuBtn').setAttribute('aria-expanded','false');state.page=1;readerRequest++;if(auth){catalogRequest++;authPage(auth[1]);}else if(profile){catalogRequest++;profilePage();}else if(read){catalogRequest++;readerPage(read[1],read[2],read[3]);}else if(title){catalogRequest++;titlePage(title[1],title[2]);}else loadCatalog();if(!home)window.scrollTo(0,0)}
 $('menuBtn').onclick=()=>{let open=$('nav').classList.toggle('open');$('menuBtn').setAttribute('aria-expanded',String(open))};

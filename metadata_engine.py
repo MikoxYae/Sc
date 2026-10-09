@@ -59,8 +59,17 @@ class MetadataEngine:
             out.append({'title':name,'original_title':title.get('native'),'alternative_titles':list(dict.fromkeys([x for x in [title.get('romaji'),title.get('english'),*(m.get('synonyms') or [])] if x and x!=name])),'description':html.unescape(re.sub(r'<[^>]*>','',m.get('description') or '')) or None,'cover':(m.get('coverImage') or {}).get('extraLarge') or (m.get('coverImage') or {}).get('large'),'banner':m.get('bannerImage'),'genres':m.get('genres') or [],'tags':[t.get('name') for t in m.get('tags') or [] if t.get('name')],'authors':authors,'artists':artists,'status':status,'original_status':m.get('status'),'chapters':m.get('chapters'),'volumes':m.get('volumes'),'rating':m.get('averageScore'),'popularity':m.get('popularity'),'content_rating':'Adult' if m.get('isAdult') else None,'original_language':{'JP':'ja','KR':'ko','CN':'zh'}.get(country),'type':typ,'format':m.get('format'),'year':(m.get('startDate') or {}).get('year'),'sources':{'anilist':m.get('id'),'myanimelist':m.get('idMal')},'source_urls':{'anilist':m.get('siteUrl')},'provider':'anilist'})
         return out
 
-    def mangadex(self, query):
-        data=self.request('mangadex','GET','https://api.mangadex.org/manga',params={'title':query,'limit':8,'includes[]':['author','artist','cover_art']})
+    def mangadex(self, query, *, include_adult=False):
+        # MangaDex's default search omits 'pornographic' titles. Explicitly
+        # request the complete rating set ONLY for an owner-classified 18+ entry.
+        # All ratings remain provider metadata, not distribution permissions.
+        ratings = ['safe', 'suggestive', 'erotica']
+        if include_adult:
+            ratings.append('pornographic')
+        params = {'title': query, 'limit': 8,
+                  'includes[]': ['author', 'artist', 'cover_art'],
+                  'contentRating[]': ratings}
+        data=self.request('mangadex','GET','https://api.mangadex.org/manga',params=params)
         out=[]
         for item in data.get('data') or []:
             a=item.get('attributes') or {}; titles=a.get('title') or {}

@@ -1,31 +1,24 @@
-# MIKO Manga Universe — Website UI Prototype
+# MIKO Manga Website
 
-A responsive, premium dark-theme manga/manhwa/webtoon website **frontend prototype**. This is a working static UI demo, not a live content-hosting service.
+Production website for the Sc Telegram Bot repository. `python3 miko.py`
+starts the bot and Python website backend together. Caddy serves the public
+HTTPS domain while the backend binds to `127.0.0.1:1276`.
 
-## Included
-- Responsive landing page and original CSS cover art
-- Manga / Manhwa / Webtoon / 18+ category filters
-- Search, chapter-list dialogs, demo vertical reader
-- Admin dashboard *UI mock* with non-secret preferences stored in browser localStorage
-- Mobile navigation, keyboard-accessible cards, closeable dialogs
+## Reader
 
-All manga names and covers in the demo are fictional placeholders. No third-party chapter images or PDFs are bundled.
+Published chapter PDF references are stored in MongoDB; PDF documents live in
+private Telegram storage channels. The VPS downloads and converts pages to
+WebP for vertically scrolling mobile and desktop reading. Left tap scrolls
+down, right tap scrolls up; normal swipe scrolling still works.
 
-## Run locally / on VPS
+18+ chapters now use a working adult self-confirmation screen instead of an
+unimplemented permanent 403. Select **I am 18+ — Continue** once per browser
+(confirmation expires after 30 days). The confirmation is not independent
+age verification, and may not meet requirements in all jurisdictions.
 
-```bash
-cd Miko-Manga-Web && python3 -m http.server 8080 --bind 0.0.0.0
-```
+## Deployment
 
-Open `http://YOUR_SERVER_IP:8080` in your browser. For public deployment, put the site behind HTTPS and a reverse proxy; avoid exposing the development server to the internet.
-
-## Next development phase (not implemented)
-- FastAPI authenticated backend and role-based admin access
-- MongoDB manga/chapter collections and unique indexes
-- Sc bot uploads authorized PDFs to a private Telegram channel; save channel ID, message ID, file ID and metadata
-- Secure Telegram retrieval service with server-side caching and PDF.js reader
-- Chapter publishing workflows, metadata management and production-grade error handling
-
-**Security:** Never put Telegram bot tokens, API hashes or MongoDB passwords in frontend JS, HTML or localStorage. Store credentials server-side in environment variables. Admin dashboard in this demo is not access-controlled and must not be used for production operations.
-
-**Rights:** Only host manga and other content you have permission to publish.
+See `../README.md` and `../deploy/README.md` for setup, HTTPS, configuration,
+and troubleshooting. Do not run a separate static-only server for production;
+API routes and private chapter retrieval need the Python backend. Keep
+`config.py`, session and MongoDB secrets outside the public website folder.

@@ -54,6 +54,11 @@ is not automatically corrected.
 
 `config.py`, MongoDB secrets, `data/`, and the pending journal remain private
 and are excluded from the release ZIP. Never share the real token/URI in logs.
-This patch does not bypass the existing adult-reader restriction: adult chapter
-images still require a separate age-eligibility implementation before being
-made readable publicly. Only publish material you have rights to distribute.
+As of v48, adult chapters are no longer blocked by the unfinished age-verification
+placeholder. Visitors must confirm that they are at least 18 before opening an
+adult chapter. The server enforces this confirmation for both chapter manifests
+and individual page images using a signed, short-lived first-party cookie.
+This is an age **self-declaration**, not independent identity verification. If
+local rules require stronger age checks, integrate a compliant verification
+provider before publicly serving adult content. Only publish material you have
+rights to distribute.

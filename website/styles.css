@@ -435,3 +435,39 @@ body.reader-mode .reader-tap-hint {
   padding: 9px 10px;
   margin: 0;
 }
+
+/* v48: accessible, mobile-first 18+ reader acknowledgement. */
+body.reader-mode .adult-confirmation {
+  max-width: 490px; width: min(100%, 490px); margin: 32px auto;
+  padding: clamp(24px, 5vw, 38px); text-align: center;
+  background: linear-gradient(145deg, #251719, #151515);
+  color: #f9f4f4; border: 1px solid #703534; border-radius: 16px;
+  box-shadow: 0 18px 50px #0005;
+}
+.adult-confirm-label {color:#ff8c80; font-size:12px; font-weight:800; letter-spacing:1px;}
+.adult-confirmation h2 {font-size:clamp(25px,6vw,36px);letter-spacing:-.5px;line-height:1.15;margin:16px 0;}
+.adult-confirmation p {line-height:1.65; font-weight:500; color:#d6cacc; font-size:14px;}
+.adult-confirm-actions {display:flex;flex-direction:column;gap:12px;margin-top:24px;}
+.adult-confirm-yes, .adult-confirm-back {
+  display:flex;justify-content:center;align-items:center;min-height:52px;
+  padding:12px 16px; border-radius:10px; font:inherit; font-weight:800;
+}
+.adult-confirm-yes {background:#e7443a; color:#fff; border:1px solid #e7443a;}
+.adult-confirm-yes:disabled {opacity:.6;cursor:wait;}
+.adult-confirm-back {background:#241d1e; color:#ffe9e9; border:1px solid #65403e; text-decoration:none;}
+.adult-confirm-yes:focus-visible, .adult-confirm-back:focus-visible {outline:3px solid #fff;outline-offset:3px;}
+.adult-confirmation .adult-confirm-feedback {min-height:1.5em;color:#ffbdb6;overflow-wrap:anywhere;}
+@media(max-width:520px){body.reader-mode .adult-confirmation{width:calc(100% - 28px);margin:24px 14px;padding:22px 16px;}}
+
+/* v49: lightweight, accessible progressive reader feedback */
+body.reader-mode .reader-progress{max-width:580px;margin:14px auto 18px;padding:18px 20px;text-align:center;line-height:1.6;}
+.reader-progress b{display:block;margin-bottom:9px;font-size:15px;}
+.reader-progress-track{height:5px;border-radius:6px;overflow:hidden;background:#303030;margin:12px auto;}
+.reader-progress-bar{width:0;height:100%;background:#eb4439;transition:width .35s ease;}
+#readerProgressText{display:block;overflow-wrap:break-word;font-size:12px;}
+body.reader-mode #readerPages:not(:empty){min-height:0;}
+
+/* v53: After the first page is ready, keep progress compact while scrolling. */
+body.reader-mode .reader-progress.reader-loading-compact{max-width:100%;margin:0;padding:8px 12px 10px;font-size:12px;}
+body.reader-mode .reader-progress.reader-loading-compact b{font-size:12px;margin-bottom:0;}
+body.reader-mode .reader-progress.reader-loading-compact .reader-progress-track{margin:4px auto;max-width:380px;}
