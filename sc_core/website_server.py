@@ -7,6 +7,7 @@ from functools import partial
 from http.cookies import SimpleCookie
 from pymongo.errors import PyMongoError,DuplicateKeyError
 from .catalog_db import public_catalog,CATEGORIES,collection,public_title,PUBLIC_TITLE_PROJECTION
+from . import catalog_db as genre_catalog
 from . import web_auth
 from . import chapter_reader
 from . import cover_proxy
@@ -71,13 +72,26 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.respond(502,{'error':'Provider cover currently unavailable'})
             except (PyMongoError,RuntimeError):
                 return self.respond(503,{'error':'Catalog temporarily unavailable'})
+        if u.path=='/api/genres':
+            q=urllib.parse.parse_qs(u.query)
+            category=q.get('category',[''])[0] or None
+            if category and category not in CATEGORIES:
+                return self.respond(400,{'error':'Invalid category'})
+            try:
+                return self.respond(200,genre_catalog.public_genres(category))
+            except (PyMongoError,RuntimeError):
+                return self.respond(503,{'error':'Genre list temporarily unavailable'})
         if u.path=='/api/catalog':
             q=urllib.parse.parse_qs(u.query)
             category=q.get('category',[''])[0] or None
             if category and category not in CATEGORIES:return self.respond(400,{'error':'Invalid category'})
             try:page=max(1,min(1000,int(q.get('page',['1'])[0])))
             except ValueError:page=1
-            try:return self.respond(200,public_catalog(category,q.get('q',[''])[0],page))
+            try:
+                genres=genre_catalog.normalize_genre_selection(q.get('genre',[]))
+            except ValueError as exc:
+                return self.respond(400,{'error':str(exc)})
+            try:return self.respond(200,public_catalog(category,q.get('q',[''])[0],page,genres=genres))
             except (PyMongoError,RuntimeError) as exc:
                 LOG.warning('Catalog unavailable: %s',type(exc).__name__)
                 return self.respond(503,{'error':'Catalog database unavailable'})

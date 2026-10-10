@@ -471,3 +471,47 @@ body.reader-mode #readerPages:not(:empty){min-height:0;}
 body.reader-mode .reader-progress.reader-loading-compact{max-width:100%;margin:0;padding:8px 12px 10px;font-size:12px;}
 body.reader-mode .reader-progress.reader-loading-compact b{font-size:12px;margin-bottom:0;}
 body.reader-mode .reader-progress.reader-loading-compact .reader-progress-track{margin:4px auto;max-width:380px;}
+
+
+/* v55: mobile-first, multi-select OR genre filtering; no catalog layout shifts */
+.genre-mount{max-width:100%;min-width:0;margin:14px 0 22px}
+.genre-filter-bar{display:flex;align-items:center;flex-wrap:wrap;gap:10px;min-height:48px}
+.genre-open,.genre-quick-clear,.genre-apply,.genre-clear{appearance:none;cursor:pointer;font-family:inherit;font-weight:800;min-height:44px}
+.genre-open{border:1px solid #7c4843;border-radius:8px;background:#241616;color:#fff;padding:10px 14px;display:flex;align-items:center;gap:10px}
+.genre-open strong{background:#f04439;border-radius:20px;min-width:23px;padding:2px 7px;font-size:12px}
+.genre-chevron{color:#f36b60;font-size:20px;line-height:1}
+.genre-helper,.genre-active-summary{color:#aaa4a2;font-size:12px;line-height:1.7;overflow-wrap:anywhere}
+.genre-active-summary{color:#f7bbb5;font-weight:700}
+.genre-quick-clear{padding:7px 12px;background:transparent;border:1px solid #5c4847;border-radius:7px;color:#e5bfba}
+.genre-panel{background:linear-gradient(135deg,#1c1718,#151515);border:1px solid #ffffff2a;padding:20px;border-radius:12px;margin-top:12px}
+.genre-panel[hidden]{display:none!important}
+.genre-panel-intro h3{margin:0 0 5px;font-size:17px;font-weight:800}
+.genre-panel-intro p{margin:0 0 14px;color:#bcb3af;font-size:12px;line-height:1.6}
+.genre-search-label{display:flex;gap:9px;align-items:center;padding:0 13px;background:#0d0d0d;border:1px solid #4a3c3b;border-radius:8px;min-height:48px;margin-bottom:16px;color:#dcb4af}
+.genre-search-label input{color:#fff;min-width:0;width:100%;font-size:16px;outline:0;border:0;background:transparent}
+.genre-choice-list{display:flex;flex-wrap:wrap;gap:9px;max-height:255px;overflow-y:auto;overscroll-behavior:contain;padding:2px 2px 8px}
+.genre-choice{display:inline-flex;align-items:center;gap:8px;border:1px solid #4f4140;border-radius:8px;background:#222;color:#ece7e4;padding:10px 12px;cursor:pointer;font-size:12px;font-weight:700;min-height:42px;max-width:100%;overflow-wrap:anywhere}
+.genre-choice:has(input:focus-visible){outline:2px solid #ff766a;outline-offset:2px}
+.genre-choice.checked{border-color:#f04439;background:#612622;color:#fff}
+.genre-choice[hidden]{display:none!important}
+.genre-choice input{accent-color:#f04439;width:16px;height:16px;flex:0 0 auto;cursor:pointer}
+.genre-buttons{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+.genre-apply{padding:11px 20px;border:0;border-radius:8px;background:#ef4438;color:#fff}
+.genre-clear{padding:10px 18px;background:transparent;border:1px solid #6d4b47;border-radius:8px;color:#e5c6c2}
+.genre-empty,.genre-warning{font-size:12px;color:#b9aaa6;line-height:1.6;margin:3px 0}
+.genre-warning{margin-top:10px}
+@media(max-width:760px){.genre-filter-bar{gap:8px}.genre-panel{padding:16px 12px}.genre-choice-list{max-height:240px}.genre-choice{font-size:12px}.genre-mount{margin:8px 0 18px}.genre-buttons button{flex:1 1 auto}}
+
+.card-genres{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px}.card-genres span{font-size:10px;color:#f0c6c0;border:1px solid #81504a;border-radius:5px;padding:3px 6px;line-height:1.35;max-width:100%;overflow-wrap:anywhere}
+.genre-limit{color:#ff8e86;font-size:12px;font-weight:700;margin:12px 0 0}.genre-limit[hidden]{display:none!important}
+
+/* v56 — separate core AniList genres from additional themes/tags */
+.genre-choice-list{display:block;max-height:330px;overflow-y:auto}
+.genre-choice-group{width:100%;min-width:0;padding-bottom:12px}
+.genre-choice-group[hidden]{display:none!important}
+.genre-choice-group + .genre-choice-group{border-top:1px solid #ffffff20;padding-top:14px}
+.genre-choice-group h4{font-size:12px;line-height:1.4;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#ff9c94;margin:0 0 11px}
+.genre-choice-group h4 span{font-size:11px;color:#bfb3b1;padding-left:4px}
+.genre-choice-group-items{display:flex;gap:9px;flex-wrap:wrap;max-width:100%}
+.genre-panel-intro p{font-size:13px}
+@media (max-width:760px){.genre-choice-list{max-height:300px}.genre-choice-group-items{gap:7px}}

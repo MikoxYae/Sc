@@ -3,13 +3,16 @@ const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const small=s=>String(s).replace(/[a-z]/gi,c=>({a:'ᴀ',b:'ʙ',c:'ᴄ',d:'ᴅ',e:'ᴇ',f:'ғ',g:'ɢ',h:'ʜ',i:'ɪ',j:'ᴊ',k:'ᴋ',l:'ʟ',m:'ᴍ',n:'ɴ',o:'ᴏ',p:'ᴘ',q:'ǫ',r:'ʀ',s:'s',t:'ᴛ',u:'ᴜ',v:'ᴠ',w:'ᴡ',x:'x',y:'ʏ',z:'ᴢ'}[c.toLowerCase()]||c));
 const names={manga:'Manga',manhwa:'Manhwa',webtoon:'Webtoon',manhua:'Manhua',adult_manga:'18+ Manga',adult_manhwa:'18+ Manhwa',adult_webtoon:'18+ Webtoon'};
-let state={page:1,filter:'',query:'',user:null,items:[],loading:false};
+let state={page:1,filter:'',query:'',user:null,items:[],loading:false,genres:[]};
+let genrePanelOpen=false;
+let genreDraft=new Set();
+const genreCache=new Map();
 let catalogRequest=0;
 let readerRequest=0;
 const cover=x=>(x.has_cover||x.cover_url)
  ? `<img class="cover-art" loading="lazy" decoding="async" src="/api/cover?category=${encodeURIComponent(x.category)}&slug=${encodeURIComponent(x.slug)}" alt="Cover artwork for ${esc(x.title)}" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="cover-placeholder" hidden>MIKO</span>`
  : '<span class="cover-placeholder">MIKO</span>';
-function card(x){const fresh=x.updated_at&&Date.now()-Date.parse(x.updated_at)<86400000;return `<a class="card" href="#/title/${esc(x.category)}/${encodeURIComponent(x.slug)}"><div class="cover">${cover(x)}${fresh?'<span class="new-label">NEW</span>':''}</div><div class="card-info"><h3>${esc(x.title)}</h3><div class="meta">${small(names[x.category]||x.category)} · ${x.chapters?.length||0} ${small('chapters')}</div></div></a>`}
+function card(x){const fresh=x.updated_at&&Date.now()-Date.parse(x.updated_at)<86400000;const genres=[...new Set([...(Array.isArray(x.genres)?x.genres:[]),...(Array.isArray(x.tags)?x.tags:[])].filter(v=>typeof v==='string'))].slice(0,3);return `<a class="card" href="#/title/${esc(x.category)}/${encodeURIComponent(x.slug)}"><div class="cover">${cover(x)}${fresh?'<span class="new-label">NEW</span>':''}</div><div class="card-info"><h3>${esc(x.title)}</h3><div class="meta">${small(names[x.category]||x.category)} · ${x.chapters?.length||0} ${small('chapters')}</div>${genres.length?`<div class="card-genres">${genres.map(g=>`<span>${esc(g)}</span>`).join('')}</div>`:''}</div></a>`}
 // Retry interrupted GET requests, but never repeat a login or registration POST.
 // Reader jobs run on the server, so retrying a GET only checks their status.
 const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -54,8 +57,112 @@ async function api(path,opts={}){
  throw Error('Reader request was interrupted.');
 }
 function pager(total){if(total<=1)return '';return `<div class="pager"><button ${state.page<=1?'disabled':''} data-page="${state.page-1}">${small('Previous')}</button><b>${state.page} / ${total}</b><button ${state.page>=total?'disabled':''} data-page="${state.page+1}">${small('Next')}</button></div>`}
-async function loadCatalog(){const requestId=++catalogRequest;const route=location.hash.match(/^#\/category\/(manga|manhwa|manhua|webtoon|adult_manga|adult_manhwa|adult_webtoon)/);const category=route?route[1]:state.filter;const params=new URLSearchParams({page:state.page,q:state.query});if(category)params.set('category',category);const target=route?$('routePage'):$('cards');target.innerHTML='<p class="catalog-state">'+small('Loading published stories...')+'</p>';try{const data=await api('catalog?'+params);if(requestId!==catalogRequest)return;state.items=data.items;const cards=data.items.map(card).join('')||`<div class="catalog-state">${small(data.partial?'Some categories are currently unavailable. Please retry.':'No published stories yet.')}</div>`;const notice=data.partial?`<p class="catalog-state partial-warning">${small('Some categories are temporarily unavailable. Showing available stories.')}</p>`:'';if(route){target.innerHTML=`<div class="page-breadcrumb"><a href="#/">${small('Home')}</a> / ${small(names[category])}</div><div class="listing-heading"><h1>${small(names[category])}</h1><span>${data.total} ${small('stories')}</span></div>${notice}<div class="cards category-cards">${cards}</div>${pager(data.pages)}`}else{target.innerHTML=notice+cards;$('resultCount').textContent=data.total+' '+small('published titles');$('catalogPager').innerHTML=pager(data.pages)}document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>{state.page=+b.dataset.page;loadCatalog();window.scrollTo({top:0,behavior:'smooth'})})}catch(e){if(requestId!==catalogRequest)return;target.innerHTML='<p class="catalog-state">'+small('Catalog temporarily unavailable. Please try again later.')+'</p><button class="retry-catalog" type="button">'+small('Retry')+'</button>';const retry=target.querySelector('.retry-catalog');if(retry)retry.onclick=loadCatalog;if(!route)$('catalogPager').innerHTML=''}}
-async function titlePage(cat,slug){$('routePage').innerHTML='<p class="catalog-state">'+small('Loading...')+'</p>';try{const x=await api('title?category='+cat+'&slug='+encodeURIComponent(slug));if(!x){$('routePage').innerHTML='<p class="catalog-state">'+small('Title not found on this page.')+'</p>';return}const chapters=(x.chapters||[]).map(ch=>`<a class="chapter" href="#/read/${encodeURIComponent(cat)}/${encodeURIComponent(slug)}/${encodeURIComponent(ch.number)}"><b>${small('Chapter')} ${esc(ch.number)}</b><span>${small('Read now')} →</span></a>`).join('');$('routePage').innerHTML=`<div class="page-breadcrumb"><a href="#/">${small('Home')}</a> / <a href="#/category/${cat}">${small(names[cat])}</a></div><div class="detail-hero"><div class="detail-poster cover">${cover(x)}</div><div class="detail-info"><span class="kicker">${small(names[cat])}</span><h1>${esc(x.title)}</h1><div class="story-facts">${x.status?`<span>${small(x.status)}</span>`:''}${x.year?`<span>${esc(x.year)}</span>`:''}${Array.isArray(x.genres)?x.genres.slice(0,5).map(g=>`<span>${esc(g)}</span>`).join(''):''}</div><h3>${small('Synopsis')}</h3><p class="story-synopsis">${esc(x.description||'Synopsis not available from verified metadata sources yet.')}</p>${Array.isArray(x.authors)&&x.authors.length?`<p class="story-credit"><b>${small('Author')}:</b> ${esc(x.authors.join(', '))}</p>`:''}${Array.isArray(x.artists)&&x.artists.length?`<p class="story-credit"><b>${small('Artist')}:</b> ${esc(x.artists.join(', '))}</p>`:''}${x.metadata_source_urls?`<p class="story-credit metadata-credit">${small('Metadata')}: ${Object.keys(x.metadata_source_urls).map(k=>esc(k)).join(' · ')}</p>`:''}</div></div><div class="listing-heading"><h2>${small('Chapter list')}</h2><span>${x.chapters?.length||0}</span></div><div class="chapter-list">${chapters}</div>`}catch(e){$('routePage').innerHTML='<p class="catalog-state">'+small('Unable to load story.')+'</p>'}}
+// v56: permanent AniList core genres + common manga themes (not title metadata).
+// Selected choices still match real published-record genres OR tags only.
+function genreControlMarkup(category, options=[], warning='', panelId='homeGenrePanel', coreGenres=[]){
+ const active=state.genres.length;
+ const values=[...new Set([...options,...genreDraft])].sort((a,b)=>a.localeCompare(b));
+ const core=new Set(coreGenres.map(s=>s.toLowerCase()));
+ const draw=(names,label)=>names.length?`<div class="genre-choice-group"><h4>${esc(label)} <span>${names.length}</span></h4><div class="genre-choice-group-items">${names.map(genre=>{
+  const index=values.indexOf(genre);
+  return `<label class="genre-choice${genreDraft.has(genre)?' checked':''}"><input type="checkbox" data-genre-index="${index}" ${genreDraft.has(genre)?'checked':''}><span>${esc(genre)}</span></label>`;
+ }).join('')}</div></div>`:'';
+ const coreNames=values.filter(n=>core.has(n.toLowerCase()));
+ const otherNames=values.filter(n=>!core.has(n.toLowerCase()));
+ const tags=draw(coreNames,'AniList genres')+draw(otherNames,'Themes & more');
+ return `<div class="genre-filter-bar"><button type="button" class="genre-open" aria-expanded="${genrePanelOpen}" aria-controls="${panelId}">☷ ${small('Genres')} ${active?`<strong>${active}</strong>`:''}<span class="genre-chevron">${genrePanelOpen?'−':'+'}</span></button>${active?`<span class="genre-active-summary">${state.genres.map(esc).join(' · ')}</span><button class="genre-quick-clear" type="button">${small('Clear')}</button>`:`<span class="genre-helper">${small('Select multiple genres')}</span>`}</div>
+ <div class="genre-panel" id="${panelId}" ${genrePanelOpen?'':'hidden'}><div class="genre-panel-intro"><h3>${small('Choose genres & themes')}</h3><p>Match ANY selected genre or theme (OR). Up to 16 selections. Only published titles with matching metadata appear.</p></div><label class="genre-search-label"><span>⌕</span><input type="search" placeholder="Search Action, Isekai, School Life…" autocomplete="off" aria-label="Find genre"></label>
+ <div class="genre-choice-list">${tags||`<p class="genre-empty">${small(warning||'Genres are loading…')}</p>`}</div><p class="genre-limit" role="status" hidden>Choose up to 16 genres.</p><div class="genre-buttons"><button type="button" class="genre-apply">${small('Apply filters')} (${genreDraft.size})</button><button type="button" class="genre-clear">${small('Clear all')}</button></div>${warning&&tags?`<p class="genre-warning">${esc(warning)}</p>`:''}</div>`;
+}
+function renderGenreControls(category,warning=''){
+ const mount=document.querySelector('#routePage:not([hidden]) .genre-mount') || document.querySelector('#homeContent:not([hidden]) .genre-mount');
+ if(!mount)return;
+ const inside=selector=>mount.querySelector(selector);
+ const cached=genreCache.get(category||'all');
+ const options=cached?.genres||[];
+ const values=[...new Set([...options,...genreDraft])].sort((a,b)=>a.localeCompare(b));
+ mount.innerHTML=genreControlMarkup(category,options,warning||(!cached?'Loading available genres...':''),mount.closest('#routePage')?'categoryGenrePanel':'homeGenrePanel',cached?.anilist_genres||[]);
+ inside('.genre-open').onclick=()=>{genrePanelOpen=!genrePanelOpen;genreDraft=new Set(state.genres);renderGenreControls(category,warning)};
+ const quick=inside('.genre-quick-clear');
+ if(quick)quick.onclick=()=>{state.genres=[];genreDraft=new Set();state.page=1;genrePanelOpen=false;loadCatalog()};
+ const panel=inside('.genre-panel');
+ if(!genrePanelOpen)return;
+ panel.querySelectorAll('[data-genre-index]').forEach(input=>{
+  input.onchange=()=>{
+   const genre=values[Number(input.dataset.genreIndex)];
+   if(input.checked && genreDraft.size>=16){input.checked=false;inside('.genre-limit').hidden=false;return;}
+   inside('.genre-limit').hidden=true;
+   if(input.checked)genreDraft.add(genre);else genreDraft.delete(genre);
+   input.closest('.genre-choice').classList.toggle('checked',input.checked);
+   inside('.genre-apply').textContent=small('Apply filters')+` (${genreDraft.size})`;
+  };
+ });
+ inside('.genre-search-label input').oninput=e=>{
+  const needle=e.target.value.trim().toLocaleLowerCase();
+  panel.querySelectorAll('.genre-choice').forEach(label=>{
+   label.hidden=Boolean(needle && !label.textContent.toLocaleLowerCase().includes(needle));
+  });
+  panel.querySelectorAll('.genre-choice-group').forEach(group=>{
+   group.hidden=![...group.querySelectorAll('.genre-choice')].some(label=>!label.hidden);
+  });
+ };
+ inside('.genre-apply').onclick=()=>{
+  state.genres=[...genreDraft];state.page=1;genrePanelOpen=false;loadCatalog();
+ };
+ inside('.genre-clear').onclick=()=>{
+  state.genres=[];genreDraft=new Set();state.page=1;genrePanelOpen=false;loadCatalog();
+ };
+}
+async function loadGenreOptions(category, requestId){
+ const key=category||'all';
+ const cached=genreCache.get(key);
+ if(cached && Date.now()-cached.fetched<60000){renderGenreControls(category);return;}
+ renderGenreControls(category);
+ try{
+  const data=await api('genres'+(category?'?category='+encodeURIComponent(category):''));
+  if(requestId!==catalogRequest)return;
+  genreCache.set(key,{genres:data.genres||[],anilist_genres:data.anilist_genres||[],fetched:Date.now()});
+  renderGenreControls(category,data.partial?'Some genre options are temporarily unavailable.':'');
+ }catch(err){
+  if(requestId!==catalogRequest)return;
+  renderGenreControls(category,'Genre options are currently unavailable. Try again later.');
+ }
+}
+async function loadCatalog(){
+ const requestId=++catalogRequest;
+ const route=location.hash.match(/^#\/category\/(manga|manhwa|manhua|webtoon|adult_manga|adult_manhwa|adult_webtoon)/);
+ const category=route?route[1]:state.filter;
+ const params=new URLSearchParams({page:state.page,q:state.query});
+ if(category)params.set('category',category);
+ state.genres.forEach(genre=>params.append('genre',genre));
+ const target=route?$('routePage'):$('cards');
+ target.innerHTML='<p class="catalog-state">'+small('Loading published stories...')+'</p>';
+ try{
+  const data=await api('catalog?'+params);
+  if(requestId!==catalogRequest)return;
+  state.items=data.items;
+  const cards=data.items.map(card).join('')||`<div class="catalog-state">${small(data.partial?'Some categories are currently unavailable. Please retry.':state.genres.length?'No stories match your selected genres. Try fewer filters.':'No published stories yet.')}</div>`;
+  const notice=data.partial?`<p class="catalog-state partial-warning">${small('Some categories are temporarily unavailable. Showing available stories.')}</p>`:'';
+  if(route){
+   target.innerHTML=`<div class="page-breadcrumb"><a href="#/">${small('Home')}</a> / ${small(names[category])}</div><div class="listing-heading"><h1>${small(names[category])}</h1><span>${data.total} ${small('stories')}</span></div><div class="genre-mount" aria-label="Filter by genres"></div>${notice}<div class="cards category-cards">${cards}</div>${pager(data.pages)}`;
+  }else{
+   target.innerHTML=notice+cards;
+   $('resultCount').textContent=data.total+' '+small('published titles');
+   $('catalogPager').innerHTML=pager(data.pages);
+  }
+  genreDraft=new Set(state.genres);
+  loadGenreOptions(category,requestId);
+  document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>{
+   state.page=+b.dataset.page;loadCatalog();window.scrollTo({top:0,behavior:'smooth'});
+  });
+ }catch(e){
+  if(requestId!==catalogRequest)return;
+  target.innerHTML='<p class="catalog-state">'+small('Catalog temporarily unavailable. Please try again later.')+'</p><button class="retry-catalog" type="button">'+small('Retry')+'</button>';
+  const retry=target.querySelector('.retry-catalog');if(retry)retry.onclick=loadCatalog;
+  if(!route)$('catalogPager').innerHTML='';
+ }
+}
+async function titlePage(cat,slug){$('routePage').innerHTML='<p class="catalog-state">'+small('Loading...')+'</p>';try{const x=await api('title?category='+cat+'&slug='+encodeURIComponent(slug));if(!x){$('routePage').innerHTML='<p class="catalog-state">'+small('Title not found on this page.')+'</p>';return}const chapters=(x.chapters||[]).map(ch=>`<a class="chapter" href="#/read/${encodeURIComponent(cat)}/${encodeURIComponent(slug)}/${encodeURIComponent(ch.number)}"><b>${small('Chapter')} ${esc(ch.number)}</b><span>${small('Read now')} →</span></a>`).join('');$('routePage').innerHTML=`<div class="page-breadcrumb"><a href="#/">${small('Home')}</a> / <a href="#/category/${cat}">${small(names[cat])}</a></div><div class="detail-hero"><div class="detail-poster cover">${cover(x)}</div><div class="detail-info"><span class="kicker">${small(names[cat])}</span><h1>${esc(x.title)}</h1><div class="story-facts">${x.status?`<span>${small(x.status)}</span>`:''}${x.year?`<span>${esc(x.year)}</span>`:''}${[...new Set([...(Array.isArray(x.genres)?x.genres:[]),...(Array.isArray(x.tags)?x.tags:[])])].filter(g=>typeof g==='string').slice(0,8).map(g=>`<span>${esc(g)}</span>`).join('')}</div><h3>${small('Synopsis')}</h3><p class="story-synopsis">${esc(x.description||'Synopsis not available from verified metadata sources yet.')}</p>${Array.isArray(x.authors)&&x.authors.length?`<p class="story-credit"><b>${small('Author')}:</b> ${esc(x.authors.join(', '))}</p>`:''}${Array.isArray(x.artists)&&x.artists.length?`<p class="story-credit"><b>${small('Artist')}:</b> ${esc(x.artists.join(', '))}</p>`:''}${x.metadata_source_urls?`<p class="story-credit metadata-credit">${small('Metadata')}: ${Object.keys(x.metadata_source_urls).map(k=>esc(k)).join(' · ')}</p>`:''}</div></div><div class="listing-heading"><h2>${small('Chapter list')}</h2><span>${x.chapters?.length||0}</span></div><div class="chapter-list">${chapters}</div>`}catch(e){$('routePage').innerHTML='<p class="catalog-state">'+small('Unable to load story.')+'</p>'}}
 function readerFailure(cat,slug,chapter,message){
  const status=$('readerStatus');
  if(!status)return;
@@ -227,7 +334,7 @@ async function readerPage(cat,slug,chapter){
  }
  if(id===readerRequest)readerFailure(cat,slug,chapter,'Chapter is taking too long. Tap Retry to check again.');
 }
-function route(){let h=decodeURIComponent(location.hash||'#/');const cat=h.match(/^#\/category\/(manga|manhwa|manhua|webtoon|adult_manga|adult_manhwa|adult_webtoon)/),title=h.match(/^#\/title\/(manga|manhwa|manhua|webtoon|adult_manga|adult_manhwa|adult_webtoon)\/(.+)$/),read=h.match(/^#\/read\/(manga|manhwa|manhua|webtoon|adult_manga|adult_manhwa|adult_webtoon)\/([^/]+)\/(.+)$/);const auth=h.match(/^#\/auth\/(login|signup)$/),profile=h==='#/profile';const home=!cat&&!title&&!read&&!auth&&!profile;document.body.classList.toggle('reader-mode',Boolean(read));document.documentElement.classList.toggle('reader-mode',Boolean(read));$('homeContent').hidden=!home;$('routePage').hidden=home;$('nav').classList.remove('open');$('menuBtn').setAttribute('aria-expanded','false');state.page=1;readerRequest++;if(auth){catalogRequest++;authPage(auth[1]);}else if(profile){catalogRequest++;profilePage();}else if(read){catalogRequest++;readerPage(read[1],read[2],read[3]);}else if(title){catalogRequest++;titlePage(title[1],title[2]);}else loadCatalog();if(!home)window.scrollTo(0,0)}
+function route(){let h=decodeURIComponent(location.hash||'#/');const cat=h.match(/^#\/category\/(manga|manhwa|manhua|webtoon|adult_manga|adult_manhwa|adult_webtoon)/),title=h.match(/^#\/title\/(manga|manhwa|manhua|webtoon|adult_manga|adult_manhwa|adult_webtoon)\/(.+)$/),read=h.match(/^#\/read\/(manga|manhwa|manhua|webtoon|adult_manga|adult_manhwa|adult_webtoon)\/([^/]+)\/(.+)$/);const auth=h.match(/^#\/auth\/(login|signup)$/),profile=h==='#/profile';const home=!cat&&!title&&!read&&!auth&&!profile;document.body.classList.toggle('reader-mode',Boolean(read));document.documentElement.classList.toggle('reader-mode',Boolean(read));$('homeContent').hidden=!home;$('routePage').hidden=home;$('nav').classList.remove('open');$('menuBtn').setAttribute('aria-expanded','false');state.page=1;genrePanelOpen=false;readerRequest++;if(auth){catalogRequest++;authPage(auth[1]);}else if(profile){catalogRequest++;profilePage();}else if(read){catalogRequest++;readerPage(read[1],read[2],read[3]);}else if(title){catalogRequest++;titlePage(title[1],title[2]);}else loadCatalog();if(!home)window.scrollTo(0,0)}
 $('menuBtn').onclick=()=>{let open=$('nav').classList.toggle('open');$('menuBtn').setAttribute('aria-expanded',String(open))};
 document.querySelectorAll('.category[data-filter]').forEach(b=>b.onclick=()=>location.hash='#/category/'+(b.dataset.filter.toLowerCase()));
 document.querySelectorAll('.filter').forEach(b=>b.onclick=()=>{state.filter=b.dataset.filter==='All'?'':b.dataset.filter.toLowerCase();state.page=1;document.querySelectorAll('.filter').forEach(z=>z.classList.toggle('selected',z===b));loadCatalog()});

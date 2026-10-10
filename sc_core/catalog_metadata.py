@@ -244,7 +244,7 @@ def select_metadata(title: str, category: str, engine: MetadataEngine, *, extra_
         related = [candidates[0]]
     values = {}
     field_sources = {}
-    for key in ('cover_url', 'description', 'genres', 'authors', 'artists',
+    for key in ('cover_url', 'description', 'genres', 'tags', 'authors', 'artists',
                 'status', 'alternative_titles', 'original_title', 'original_language',
                 'year', 'rating'):
         for provider, item in related:
@@ -254,7 +254,7 @@ def select_metadata(title: str, category: str, engine: MetadataEngine, *, extra_
                 value = raw if valid_cover(raw) else None
             elif key == 'description':
                 value = clean_description(raw)
-            elif key in ('genres', 'authors', 'artists', 'alternative_titles'):
+            elif key in ('genres', 'tags', 'authors', 'artists', 'alternative_titles'):
                 value = normalize_lists(raw)
             elif key == 'status':
                 value = raw if raw not in ('Unknown', None, '') else None

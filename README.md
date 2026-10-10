@@ -62,3 +62,30 @@ Some reader tests use PyMuPDF, Pillow and optional runtime packages. Network/Tel
 ## Architecture
 
 Telegram stores chapter PDF files; MongoDB stores published metadata and Telegram message references. Reader PDFs/images and covers are cached in `data/`, not saved in MongoDB. Bot settings and publishing journals stay in `data/` to survive upgrades. For adult chapters the existing confirmation restrictions are unchanged.
+
+
+## Genre filtering (v55)
+
+On the home catalog or any category page (Manga, Manhwa, Manhua,
+Webtoon and the three 18+ categories), select **Genres**, choose one
+or more tags, and press **Apply filters**. Multiple tags use **ANY / OR**
+matching: Action + Psychological shows titles tagged with Action,
+Psychological, or both. Pagination reflects the filtered total and still
+shows ten titles per page. **Clear** resets the genre filter.
+
+The genre selector reads only tags already present on published titles
+in MongoDB. Titles missing verified genre metadata cannot be matched by
+a genre filter until their metadata has been enriched. The API routes are:
+
+- `GET /api/genres?category=manhwa` (omit category for all genres)
+- `GET /api/catalog?category=manhwa&genre=Action&genre=Psychological&page=1`
+
+No new Python dependency, environment variable or database migration is required.
+Existing authentication, reader, Telegram storage and config remain unchanged.
+
+## Genre filters (v56)
+
+The website exposes multiple-choice genre and theme filters on Home and each
+category. The available options include the AniList genre baseline and common
+manga community labels; results match **any** choice against actual published
+genres/tags. See `docs/GENRE_FILTER_V56.md` for matching and refresh behavior.

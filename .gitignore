@@ -20,3 +20,9 @@ __pycache__/
 *.log
 *.bak
 *.zip
+
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
